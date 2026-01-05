@@ -6,6 +6,7 @@ import Card from "../../../components/ui/card";
 import Input from "../../../components/ui/input";
 import Textarea from "../../../components/ui/textarea";
 import { listSubmissions, updateSubmissionFeedback, fetchAssignment } from "../../../lib/data";
+import { formatAnyTimestamp } from "../../../lib/utils";
 import type { Assignment, Submission } from "../../../lib/types";
 
 type SubmissionRow = Submission & { assignment?: Assignment | null };
@@ -50,7 +51,7 @@ export default function AdminSubmissionsPage() {
                 <p className="text-sm font-semibold">{s.assignment?.title_en || s.assignmentId}</p>
                 <p className="text-xs text-neutral-500">{s.uid}</p>
               </div>
-              <span className="text-xs text-neutral-500">{s.submittedAt}</span>
+              <span className="text-xs text-neutral-500">{formatAnyTimestamp(s.submittedAt)}</span>
             </div>
             {s.textAnswer && <p className="text-sm text-neutral-700">Answer: {s.textAnswer}</p>}
             {s.fileUrl && (
