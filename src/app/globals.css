@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+:root {
+  --gradient: radial-gradient(circle at 10% 20%, #e0f2fe 0, transparent 25%), radial-gradient(circle at 90% 10%, #dbeafe 0, transparent 20%);
+}
+
+body {
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  background: var(--gradient), #f8fafc;
+}
+
+a {
+  text-decoration: none;
+}
+
+* {
+  box-sizing: border-box;
+}

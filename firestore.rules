@@ -1,0 +1,69 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userRole() {
+      return isSignedIn() ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role : null;
+    }
+
+    function isAdmin() {
+      return userRole() == "admin";
+    }
+
+    function isTeacher() {
+      return userRole() == "teacher";
+    }
+
+    function hasActiveEnrollment(courseId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/enrollments/$(request.auth.uid + "_" + courseId)) &&
+        get(/databases/$(database)/documents/enrollments/$(request.auth.uid + "_" + courseId)).data.status == "active";
+    }
+
+    match /users/{uid} {
+      allow read, write: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
+    }
+
+    match /courses/{courseId} {
+      allow read: if resource.data.published == true;
+      allow write: if isAdmin();
+    }
+
+    match /modules/{moduleId} {
+      allow read: if isAdmin() || (isSignedIn() && hasActiveEnrollment(get(/databases/$(database)/documents/modules/$(moduleId)).data.courseId));
+      allow write: if isAdmin();
+    }
+
+    match /lessons/{lessonId} {
+      allow read: if isAdmin() || (isSignedIn() && hasActiveEnrollment(get(/databases/$(database)/documents/modules/$(resource.data.moduleId)).data.courseId));
+      allow write: if isAdmin();
+    }
+
+    match /enrollments/{enrollmentId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /payments/{paymentId} {
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow read: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow update: if (isSignedIn() && resource.data.uid == request.auth.uid && resource.data.status in ["created", "submitted"]) || isAdmin();
+      allow delete: if false;
+    }
+
+    match /assignments/{assignmentId} {
+      allow read: if isAdmin() || (isSignedIn() && hasActiveEnrollment(get(/databases/$(database)/documents/modules/$(get(/databases/$(database)/documents/lessons/$(resource.data.lessonId)).data.moduleId)).data.courseId));
+      allow write: if isAdmin();
+    }
+
+    match /submissions/{submissionId} {
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow read: if isAdmin() || isTeacher() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow update: if isAdmin() || isTeacher();
+      allow delete: if false;
+    }
+  }
+}
