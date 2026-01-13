@@ -19,6 +19,7 @@ import {
   where,
   arrayUnion,
   arrayRemove,
+  type QueryConstraint,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { uploadFile } from "./storage";
@@ -230,6 +231,59 @@ export const getEnrollment = async (
   return { hasAccess, enrollment };
 };
 
+export const getCourseAccessState = async (
+  uid: string,
+  courseId: string,
+): Promise<{ state: "enrolled" | "pending" | "approved_waiting_enrollment" | "none"; paymentId?: string }> => {
+  const enrollmentId = `${uid}_${courseId}`;
+  const enrollmentSnap = await getDoc(doc(db, "enrollments", enrollmentId));
+  if (enrollmentSnap.exists()) {
+    return { state: "enrolled" };
+  }
+
+  const paymentQuery = query(
+    collection(db, "payments"),
+    where("uid", "==", uid),
+    where("courseId", "==", courseId),
+    orderBy("createdAt", "desc"),
+    limit(1),
+  );
+  const paymentSnap = await getDocs(paymentQuery);
+  if (paymentSnap.empty) return { state: "none" };
+
+  const payment = normalizePayment(mapDoc<Payment>(paymentSnap.docs[0]));
+  if (payment.status === "pending") {
+    return { state: "pending", paymentId: payment.id };
+  }
+  if (payment.status === "approved") {
+    return { state: "approved_waiting_enrollment", paymentId: payment.id };
+  }
+  return { state: "none", paymentId: payment.id };
+};
+
+export const ensureEnrollment = async (uid: string, courseId: string) => {
+  const enrollmentId = `${uid}_${courseId}`;
+  const enrollmentSnap = await getDoc(doc(db, "enrollments", enrollmentId));
+  if (enrollmentSnap.exists()) return;
+
+  const paymentQuery = query(
+    collection(db, "payments"),
+    where("uid", "==", uid),
+    where("courseId", "==", courseId),
+    where("status", "==", "approved"),
+    orderBy("createdAt", "desc"),
+    limit(1),
+  );
+  const paymentSnap = await getDocs(paymentQuery);
+  if (paymentSnap.empty) return;
+
+  await addDoc(collection(db, "enrollmentRequests"), {
+    uid,
+    courseId,
+    createdAt: serverTimestamp(),
+  });
+};
+
 export const listEnrollments = async (uid: string): Promise<Enrollment[]> => {
   const q = query(collection(db, "enrollments"), where("uid", "==", uid), orderBy("createdAt", "desc"));
   const snap = await getDocs(q);
@@ -258,13 +312,23 @@ export const createEnrollment = async (uid: string, courseId: string) => {
   return enrollmentId;
 };
 
+const normalizePayment = (payment: Payment): Payment => {
+  const status =
+    payment.status === "approved" || payment.status === "rejected" ? payment.status : "pending";
+  return {
+    ...payment,
+    status,
+    createdAt: payment.createdAt ?? null,
+  };
+};
+
 export const listPayments = async (opts: { uid?: string; status?: PaymentStatus } = {}): Promise<Payment[]> => {
   const constraints = [];
   if (opts.uid) constraints.push(where("uid", "==", opts.uid));
   if (opts.status) constraints.push(where("status", "==", opts.status));
   const q = query(collection(db, "payments"), ...constraints, orderBy("createdAt", "desc"));
   const snap = await getDocs(q);
-  return snap.docs.map((d) => mapDoc<Payment>(d));
+  return snap.docs.map((d) => normalizePayment(mapDoc<Payment>(d)));
 };
 
 export const getPaymentForCourse = async (uid: string, courseId: string): Promise<Payment | null> => {
@@ -277,83 +341,35 @@ export const getPaymentForCourse = async (uid: string, courseId: string): Promis
   );
   const snap = await getDocs(q);
   if (snap.empty) return null;
-  return mapDoc<Payment>(snap.docs[0]);
+  return normalizePayment(mapDoc<Payment>(snap.docs[0]));
 };
 
-export const getPaymentId = (uid: string, courseId: string) => `${uid}_${courseId}`;
+type CreatePaymentPayload = Omit<Payment, "id" | "status" | "createdAt"> & { status?: PaymentStatus };
 
-export const getExistingPayment = async (uid: string, courseId: string): Promise<Payment | null> => {
-  return getPaymentForCourse(uid, courseId);
-};
-
-export const createPayment = async (
-  payment: Omit<Payment, "id" | "status" | "createdAt" | "updatedAt"> & { status?: PaymentStatus },
-) => {
-  const isDev = process.env.NODE_ENV !== "production";
-  const paymentId = getPaymentId(payment.uid, payment.courseId);
-  // Guard against duplicate payments for the same user/course.
-  const paymentRef = doc(db, "payments", paymentId);
-  const enrollment = await getActiveEnrollment(payment.uid, payment.courseId);
-  if (enrollment?.status === "active") {
-    if (isDev) console.info("[payments] blocked: active enrollment", { paymentId });
-    throw new Error("ALREADY_PURCHASED");
-  }
-
-  const existingSnap = await getDoc(paymentRef);
-  const existing = existingSnap.exists() ? mapDoc<Payment>(existingSnap) : null;
-  if (existing && (existing.status === "submitted" || existing.status === "confirmed")) {
-    if (isDev) console.info("[payments] blocked: existing payment", { paymentId, status: existing.status });
-    throw new Error("PAYMENT_EXISTS");
-  }
-
-  if (existing) {
-    // Idempotent create: return the deterministic id if a prior attempt exists.
-    return paymentId;
-  }
-
-  await setDoc(paymentRef, {
+export function createPayment(payment: CreatePaymentPayload): Promise<string>;
+export function createPayment(uid: string, courseId: string): Promise<string>;
+export async function createPayment(
+  paymentOrUid: CreatePaymentPayload | string,
+  courseId?: string,
+): Promise<string> {
+  const payment =
+    typeof paymentOrUid === "string"
+      ? ({ uid: paymentOrUid, courseId } as CreatePaymentPayload)
+      : paymentOrUid;
+  const ref = await addDoc(collection(db, "payments"), {
     ...payment,
-    // "submitted" is treated as the pending status in this app.
-    status: payment.status ?? "submitted",
+    status: payment.status ?? "pending",
     createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-  return paymentId;
-};
-
-export const createPendingPayment = async (uid: string, courseId: string) => {
-  const ref = await addDoc(collection(db, "payments"), {
-    uid,
-    courseId,
-    status: "pending",
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
   });
   return ref.id;
-};
+}
 
-export const createPaymentRequest = async (uid: string, courseId: string, amount: number) => {
-  const ref = await addDoc(collection(db, "payments"), {
-    uid,
-    courseId,
-    amount,
-    status: "pending",
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-  return ref.id;
-};
-
-export const updatePaymentStatus = async (paymentId: string, status: PaymentStatus) => {
-  await updateDoc(doc(db, "payments", paymentId), { status, updatedAt: serverTimestamp() });
-};
-
-export const adminListPaymentsByStatus = async (status?: "pending" | "approved" | "rejected") => {
+export const adminListPaymentsByStatus = async (status?: PaymentStatus) => {
   const constraints = [];
   if (status) constraints.push(where("status", "==", status));
   const q = query(collection(db, "payments"), ...constraints, orderBy("createdAt", "desc"), limit(50));
   const snap = await getDocs(q);
-  return snap.docs.map((d) => mapDoc<Payment>(d));
+  return snap.docs.map((d) => normalizePayment(mapDoc<Payment>(d)));
 };
 
 export const adminGrantEnrollment = async (uid: string, courseId: string) => {
@@ -369,19 +385,20 @@ export const adminGrantEnrollment = async (uid: string, courseId: string) => {
   return enrollmentId;
 };
 
-export const adminMarkPaymentPaid = async (paymentId: string) => {
-  const snap = await getDoc(doc(db, "payments", paymentId));
-  if (!snap.exists()) return;
-  const payment = mapDoc<Payment>(snap);
-  await updateDoc(doc(db, "payments", paymentId), { status: "approved", updatedAt: serverTimestamp() });
-  await adminGrantEnrollment(payment.uid, payment.courseId);
+export const adminReviewPayment = async (paymentId: string, status: PaymentStatus, reviewerUid: string, note?: string) => {
+  await updateDoc(doc(db, "payments", paymentId), {
+    status,
+    reviewedAt: serverTimestamp(),
+    reviewerUid,
+    ...(note ? { note } : {}),
+  });
 };
 
 export const uploadPaymentProof = async (uid: string, paymentId: string, file: File) => {
   const path = `payments/${uid}/${paymentId}/proof`;
   const url = await uploadFile(path, file, { contentType: file.type });
-  await updateDoc(doc(db, "payments", paymentId), { proofUrl: url, updatedAt: serverTimestamp() });
-  return url;
+  await updateDoc(doc(db, "payments", paymentId), { proofUrl: url, proofPath: path });
+  return { url, path };
 };
 
 export const subscribeToPayment = (paymentId: string, cb: (payment: Payment | null) => void) => {
@@ -393,33 +410,12 @@ export const subscribeToPayment = (paymentId: string, cb: (payment: Payment | nu
         cb(null);
         return;
       }
-      cb(mapDoc<Payment>(snap));
+      cb(normalizePayment(mapDoc<Payment>(snap)));
     },
     (err) => {
       console.error("[firestore] subscribeToPayment error", { paymentId, err });
     },
   );
-};
-
-export const createEnrollmentFromPayment = async ({
-  payment,
-  accessUntil,
-}: {
-  payment: Payment;
-  accessUntil?: Date;
-}) => {
-  const enrollmentId = `${payment.uid}_${payment.courseId}`;
-  await setDoc(doc(db, "enrollments", enrollmentId), {
-    uid: payment.uid,
-    courseId: payment.courseId,
-    status: "active",
-    paidAmount: payment.amount,
-    paidAt: serverTimestamp(),
-    accessUntil: accessUntil ? accessUntil.toISOString() : null,
-    createdAt: serverTimestamp(),
-  });
-  await updatePaymentStatus(payment.id, "confirmed");
-  return enrollmentId;
 };
 
 export const getAssignmentByLesson = async (lessonId: string, courseId?: string): Promise<Assignment | null> => {
@@ -495,7 +491,7 @@ export const listSubmissionsForCourse = async (
   opts: { pendingOnly?: boolean; limit?: number } = {},
 ): Promise<Submission[]> => {
   try {
-    const constraints = [where("courseId", "==", courseId), orderBy("submittedAt", "desc")];
+    const constraints: QueryConstraint[] = [where("courseId", "==", courseId), orderBy("submittedAt", "desc")];
     if (opts.pendingOnly) {
       constraints.unshift(where("checkedAt", "==", null));
     }
@@ -657,21 +653,6 @@ export const markLessonOpened = async (uid: string, courseId: string, lessonId: 
   );
 };
 
-export const markLessonCompleted = async (uid: string, courseId: string, lessonId: string) => {
-  await setDoc(
-    doc(db, "users", uid, "progress", lessonId),
-    {
-      uid,
-      courseId,
-      lessonId,
-      status: "completed",
-      completedAt: serverTimestamp(),
-      lastOpenedAt: serverTimestamp(),
-    },
-    { merge: true },
-  );
-};
-
 export const listProgressForCourse = async (uid: string, courseId: string): Promise<Progress[]> => {
   const snap = await getDocs(query(collection(db, "users", uid, "progress"), where("courseId", "==", courseId)));
   return snap.docs.map((d) => mapDoc<Progress>(d));
@@ -699,6 +680,14 @@ export const setLessonCompleted = async (uid: string, courseId: string, lessonId
     },
     { merge: true },
   );
+};
+
+export const markLessonCompleted = async (uid: string, courseId: string, lessonId: string) => {
+  return setLessonCompleted(uid, courseId, lessonId, true);
+};
+
+export const unmarkLessonCompleted = async (uid: string, courseId: string, lessonId: string) => {
+  return setLessonCompleted(uid, courseId, lessonId, false);
 };
 
 export const getUserCourseProgress = async (

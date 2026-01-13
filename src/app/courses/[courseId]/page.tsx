@@ -1,44 +1,85 @@
 'use client';
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import Button from "../../../components/ui/button";
 import Card from "../../../components/ui/card";
-import { useAuth } from "../../../lib/auth-context";
-import { fetchCourse, fetchLessonsForModule, fetchModules, getActiveEnrollment } from "../../../lib/data";
+import { useAuth, isAdmin, isTeacher } from "../../../lib/auth-context";
+import { ensureEnrollment, fetchCourse, fetchLessonsForModule, fetchModules, getCourseAccessState } from "../../../lib/data";
 import { useI18n, pickLang } from "../../../lib/i18n";
-import type { Course, Enrollment, Lesson, Module } from "../../../lib/types";
+import type { Course, Lesson, Module } from "../../../lib/types";
 
 export default function CourseDetailPage() {
   const params = useParams<{ courseId: string }>();
-  const { user } = useAuth();
+  const router = useRouter();
+  const { user, profile, loading } = useAuth();
   const { lang } = useI18n();
   const [course, setCourse] = useState<Course | null>(null);
   const [modules, setModules] = useState<Module[]>([]);
   const [lessons, setLessons] = useState<Record<string, Lesson[]>>({});
-  const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
+  const [accessState, setAccessState] = useState<"enrolled" | "pending" | "approved_waiting_enrollment" | "none">("none");
+  const [checkingAccess, setCheckingAccess] = useState(false);
 
   useEffect(() => {
     if (!params?.courseId) return;
-    fetchCourse(params.courseId).then(setCourse);
-    fetchModules(params.courseId).then(async (mods) => {
-      setModules(mods);
-      const lessonEntries: Record<string, Lesson[]> = {};
-      for (const m of mods) {
-        lessonEntries[m.id] = await fetchLessonsForModule(m.id);
-      }
-      setLessons(lessonEntries);
-    });
+    fetchCourse(params.courseId)
+      .then(setCourse)
+      .catch((err) => console.error("[course] fetchCourse failed", { courseId: params.courseId, err }));
   }, [params?.courseId]);
 
   useEffect(() => {
-    if (user && params?.courseId) {
-      getActiveEnrollment(user.uid, params.courseId).then(setEnrollment);
-    }
-  }, [user, params?.courseId]);
+    if (loading || !user || !params?.courseId) return;
+    setCheckingAccess(true);
+    getCourseAccessState(user.uid, params.courseId)
+      .then(({ state }) => setAccessState(state))
+      .catch(() => setAccessState("none"))
+      .finally(() => setCheckingAccess(false));
+  }, [user, loading, params?.courseId]);
+
+  useEffect(() => {
+    if (accessState !== "approved_waiting_enrollment") return;
+    if (!user || !params?.courseId) return;
+    const timer = setTimeout(() => {
+      ensureEnrollment(user.uid, params.courseId).catch(() => null);
+      getCourseAccessState(user.uid, params.courseId)
+        .then(({ state }) => setAccessState(state))
+        .catch(() => setAccessState("none"));
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [accessState, user, params?.courseId]);
+
+  const canReadContent = useMemo(
+    () => isAdmin(profile?.role) || isTeacher(profile?.role) || accessState === "enrolled",
+    [profile?.role, accessState],
+  );
+  const hasRoleAccess = useMemo(() => isAdmin(profile?.role) || isTeacher(profile?.role), [profile?.role]);
+
+  useEffect(() => {
+    if (!params?.courseId) return;
+    if (!canReadContent) return;
+    fetchModules(params.courseId)
+      .then(async (mods) => {
+        setModules(mods);
+        const lessonEntries: Record<string, Lesson[]> = {};
+        for (const m of mods) {
+          lessonEntries[m.id] = await fetchLessonsForModule(m.id, params.courseId);
+        }
+        setLessons(lessonEntries);
+      })
+      .catch((err) => console.error("[course] fetchModules failed", { courseId: params.courseId, err }));
+  }, [params?.courseId, canReadContent]);
 
   if (!course) return <p className="px-4 py-10 text-sm text-neutral-600">Loading course...</p>;
+
+  const firstLessonId = useMemo(() => {
+    const orderedLessons: Lesson[] = [];
+    modules.forEach((m) => {
+      const ls = lessons[m.id] || [];
+      orderedLessons.push(...ls);
+    });
+    return orderedLessons[0]?.id;
+  }, [modules, lessons]);
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-10">
@@ -57,18 +98,29 @@ export default function CourseDetailPage() {
             <p className="text-3xl font-bold">
               {course.price} {course.currency}
             </p>
-            {enrollment ? (
-              <Link href={`/learn/${course.id}`}>
+            {accessState === "enrolled" || hasRoleAccess ? (
+              <Link href={firstLessonId ? `/learn/${course.id}/lesson/${firstLessonId}` : `/learn/${course.id}`}>
                 <Button className="mt-3" fullWidth>
                   Continue learning
                 </Button>
               </Link>
+            ) : accessState === "pending" ? (
+              <Button className="mt-3" fullWidth disabled>
+                Under review
+              </Button>
+            ) : accessState === "approved_waiting_enrollment" ? (
+              <Button className="mt-3" fullWidth disabled>
+                Approved, updating access...
+              </Button>
             ) : (
-              <Link href={`/checkout/${course.id}`}>
-                <Button className="mt-3" fullWidth>
-                  Buy access
-                </Button>
-              </Link>
+              <Button
+                className="mt-3"
+                fullWidth
+                disabled={checkingAccess}
+                onClick={() => router.push(user ? `/checkout/${course.id}` : "/login")}
+              >
+                {checkingAccess ? "Checking..." : "Buy course"}
+              </Button>
             )}
           </div>
         </div>
@@ -87,7 +139,7 @@ export default function CourseDetailPage() {
                 {(lessons[mod.id] || []).map((lesson) => (
                   <div key={lesson.id} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm shadow-sm">
                     <span>{pickLang(lesson.title_kz, lesson.title_en, lang)}</span>
-                    {enrollment ? (
+                    {accessState === "enrolled" || hasRoleAccess ? (
                       <Link className="text-blue-700" href={`/learn/${course.id}/lesson/${lesson.id}`}>
                         Open
                       </Link>

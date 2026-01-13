@@ -4,7 +4,7 @@ export type CourseCategory = "exam" | "subject";
 export type CourseLevel = "beginner" | "intermediate" | "advanced";
 export type LessonType = "video" | "text" | "quiz" | "live";
 export type EnrollmentStatus = "pending" | "active" | "expired" | "refunded";
-export type PaymentStatus = "created" | "submitted" | "confirmed" | "rejected" | "refunded";
+export type PaymentStatus = "pending" | "approved" | "rejected";
 
 export type Language = "kz" | "en";
 
@@ -73,17 +73,18 @@ export interface Payment {
   id: string;
   uid: string;
   courseId: string;
-  provider: "manual_kaspi";
-  amount: number;
   status: PaymentStatus;
-  proofText?: string;
-  proofFileUrl?: string;
-  createdAt?: string;
-  updatedAt?: string;
+  createdAt: any;
+  proofUrl?: string;
+  proofPath?: string;
+  reviewedAt?: any;
+  reviewerUid?: string;
+  note?: string;
 }
 
 export interface Assignment {
   id: string;
+  courseId: string;
   lessonId: string;
   title_kz: string;
   title_en: string;
@@ -96,11 +97,29 @@ export interface Submission {
   id: string;
   assignmentId: string;
   uid: string;
+  courseId?: string;
   textAnswer?: string;
   fileUrl?: string;
+  filePath?: string;
+  fileName?: string;
+  fileSize?: number;
+  mimeType?: string;
+  contentType?: string;
   submittedAt?: string;
   feedback?: string;
   grade?: number;
   checkedBy?: string;
   checkedAt?: string;
+}
+
+export type ProgressStatus = "in_progress" | "completed";
+
+export interface Progress {
+  id: string;
+  uid: string;
+  lessonId: string;
+  courseId: string;
+  status: ProgressStatus;
+  lastOpenedAt?: string;
+  completedAt?: string;
 }
