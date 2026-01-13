@@ -1,6 +1,5 @@
 'use client';
 
-import { doc, updateDoc } from "firebase/firestore";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -10,11 +9,17 @@ import Input from "../../../components/ui/input";
 import Textarea from "../../../components/ui/textarea";
 import { RequireAuth } from "../../../components/guards";
 import { useAuth } from "../../../lib/auth-context";
-import { createPayment, fetchCourse } from "../../../lib/data";
+import {
+  createPendingPayment,
+  fetchCourse,
+  getPaymentForCourse,
+  getActiveEnrollment,
+  subscribeToPayment,
+  uploadPaymentProof,
+} from "../../../lib/data";
 import { db } from "../../../lib/firebase";
 import { useI18n, pickLang } from "../../../lib/i18n";
-import { uploadFile } from "../../../lib/storage";
-import type { Course } from "../../../lib/types";
+import type { Course, Enrollment, Payment } from "../../../lib/types";
 
 export default function CheckoutPage() {
   const params = useParams<{ courseId: string }>();
@@ -22,6 +27,9 @@ export default function CheckoutPage() {
   const { user } = useAuth();
   const { lang } = useI18n();
   const [course, setCourse] = useState<Course | null>(null);
+  const [payment, setPayment] = useState<Payment | null>(null);
+  const [paymentId, setPaymentId] = useState<string | null>(null);
+  const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [proofText, setProofText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
@@ -33,27 +41,57 @@ export default function CheckoutPage() {
     }
   }, [params?.courseId]);
 
+  useEffect(() => {
+    if (!user || !params?.courseId) return;
+    getPaymentForCourse(user.uid, params.courseId)
+      .then(setPayment)
+      // Treat permission errors as "no payment" to keep UI stable.
+      .catch(() => setPayment(null));
+    getActiveEnrollment(user.uid, params.courseId)
+      .then(setEnrollment)
+      // Treat permission errors as "no access" to keep UI stable.
+      .catch(() => setEnrollment(null));
+  }, [user, params?.courseId]);
+
+  useEffect(() => {
+    if (!paymentId) return;
+    const unsub = subscribeToPayment(paymentId, (nextPayment) => {
+      setPayment(nextPayment);
+      if (nextPayment?.status === "approved") {
+        router.push(`/learn/${params.courseId}`);
+      }
+    });
+    return () => unsub();
+  }, [paymentId, router, params.courseId]);
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !params?.courseId || !course) return;
     setError(null);
     setLoading(true);
     try {
-      const paymentId = await createPayment({
-        uid: user.uid,
-        courseId: params.courseId,
-        provider: "manual_kaspi",
-        amount: course.price,
-        proofText,
-      });
-      if (file) {
-        const url = await uploadFile(`payments/${user.uid}/${paymentId}/${file.name}`, file);
-        await updateDoc(doc(db, "payments", paymentId), { proofFileUrl: url });
+      if (enrollment?.status === "active") {
+        setError("You already own this course.");
+        return;
       }
-      router.push("/dashboard");
+      if (payment?.status === "pending" || payment?.status === "approved") {
+        setError("You already have a payment for this course.");
+        return;
+      }
+      const createdId = await createPendingPayment(user.uid, params.courseId);
+      setPaymentId(createdId);
+      if (file) {
+        await uploadPaymentProof(user.uid, createdId, file);
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to submit payment proof";
-      setError(message);
+      if (message === "ALREADY_PURCHASED") {
+        setError("You already own this course.");
+      } else if (message === "PAYMENT_EXISTS") {
+        setError("You already have a payment for this course.");
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
