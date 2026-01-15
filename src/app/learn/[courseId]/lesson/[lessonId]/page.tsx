@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Card from "../../../../../components/ui/card";
 import Button from "../../../../../components/ui/button";
 import { RequireEnrollment } from "../../../../../components/guards";
@@ -11,7 +11,9 @@ import {
   fetchLesson,
   getEnrollment,
   getAssignmentByLesson,
-  getUserCourseProgress,
+  subscribeToUserCourseProgress,
+  fetchModules,
+  fetchLessonsForModule,
   markLessonCompleted,
   unmarkLessonCompleted,
   markLessonOpened,
@@ -20,7 +22,7 @@ import {
 import { useAuth, isAdmin, isTeacher } from "../../../../../lib/auth-context";
 import { useI18n, pickLang } from "../../../../../lib/i18n";
 import { formatAnyTimestamp } from "../../../../../lib/utils";
-import type { Assignment, Course, Lesson, Submission } from "../../../../../lib/types";
+import type { Assignment, Course, Lesson, Module, Submission } from "../../../../../lib/types";
 
 export default function LessonPage() {
   const params = useParams<{ courseId: string; lessonId: string }>();
@@ -32,6 +34,8 @@ export default function LessonPage() {
   const [assignment, setAssignment] = useState<Assignment | null>(null);
   const [submission, setSubmission] = useState<Submission | null>(null);
   const [completedLessons, setCompletedLessons] = useState<string[]>([]);
+  const [modules, setModules] = useState<Module[]>([]);
+  const [lessonsByModule, setLessonsByModule] = useState<Record<string, Lesson[]>>({});
   const [savingComplete, setSavingComplete] = useState(false);
   const [hasEnrollmentAccess, setHasEnrollmentAccess] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
@@ -76,7 +80,7 @@ export default function LessonPage() {
       return;
     }
     try {
-      const unsub = subscribeToUserSubmission(assignment.id, user.uid, setSubmission);
+      const unsub = subscribeToUserSubmission(user.uid, assignment.id, setSubmission);
       return () => unsub();
     } catch (err) {
       console.error("[lesson] subscribeToUserSubmission failed", { assignmentId: assignment.id, uid: user.uid, err });
@@ -90,10 +94,27 @@ export default function LessonPage() {
     markLessonOpened(user.uid, params.courseId, params.lessonId).catch((err) =>
       console.error("[lesson] markLessonOpened failed", { uid: user.uid, courseId: params.courseId, lessonId: params.lessonId, err }),
     );
-    getUserCourseProgress(user.uid, params.courseId)
-      .then((progress) => setCompletedLessons(progress.completedLessons || []))
-      .catch((err) => console.error("[lesson] getUserCourseProgress failed", { uid: user.uid, courseId: params.courseId, err }));
+    const unsub = subscribeToUserCourseProgress(user.uid, params.courseId, (progress) => {
+      setCompletedLessons(progress.completedLessons || []);
+    });
+    return () => unsub();
   }, [user, params.lessonId, params.courseId, hasEnrollmentAccess, profile?.role]);
+
+  useEffect(() => {
+    const isPrivileged = isAdmin(profile?.role) || isTeacher(profile?.role);
+    const canAccess = isPrivileged || hasEnrollmentAccess;
+    if (!params?.courseId || !canAccess) return;
+    fetchModules(params.courseId)
+      .then(async (mods) => {
+        setModules(mods);
+        const entries: Record<string, Lesson[]> = {};
+        for (const mod of mods) {
+          entries[mod.id] = await fetchLessonsForModule(mod.id, params.courseId);
+        }
+        setLessonsByModule(entries);
+      })
+      .catch((err) => console.error("[lesson] fetchModules failed", { courseId: params.courseId, err }));
+  }, [params?.courseId, hasEnrollmentAccess, profile?.role]);
 
   useEffect(() => {
     if (!course || checkingAccess) return;
@@ -103,6 +124,14 @@ export default function LessonPage() {
       router.push(`/checkout/${params.courseId}`);
     }
   }, [course, checkingAccess, hasEnrollmentAccess, profile?.role, params.courseId, router]);
+
+  useEffect(() => {
+    const isPrivileged = isAdmin(profile?.role) || isTeacher(profile?.role);
+    if (!lesson?.id || !params?.courseId || !params?.lessonId) return;
+    if (!hasEnrollmentAccess && !isPrivileged) return;
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(`lastLesson:${params.courseId}`, params.lessonId);
+  }, [lesson?.id, params?.courseId, params?.lessonId, hasEnrollmentAccess, profile?.role]);
 
   const filenameFromUrl = (url?: string | null) => {
     if (!url) return "";
@@ -148,6 +177,19 @@ export default function LessonPage() {
     }
   };
 
+  const orderedLessonIds = useMemo(() => {
+    const ordered: string[] = [];
+    modules.forEach((mod) => {
+      const ls = lessonsByModule[mod.id] || [];
+      ls.forEach((l) => ordered.push(l.id));
+    });
+    return ordered;
+  }, [modules, lessonsByModule]);
+
+  const currentIndex = orderedLessonIds.indexOf(params.lessonId);
+  const prevLessonId = currentIndex > 0 ? orderedLessonIds[currentIndex - 1] : null;
+  const nextLessonId = currentIndex >= 0 && currentIndex < orderedLessonIds.length - 1 ? orderedLessonIds[currentIndex + 1] : null;
+
   return (
     <RequireEnrollment courseId={params.courseId}>
       <div className="mx-auto max-w-5xl px-4 py-8">
@@ -157,6 +199,27 @@ export default function LessonPage() {
           </Link>
           <h1 className="text-3xl font-semibold">{lesson ? pickLang(lesson.title_kz, lesson.title_en, lang) : "Lesson"}</h1>
           {course && <p className="text-sm text-neutral-600">{pickLang(course.title_kz, course.title_en, lang)}</p>}
+        </div>
+        <div className="mb-4">
+          <Button variant="secondary" onClick={() => router.push(`/learn/${params.courseId}`)}>
+            Back to course
+          </Button>
+        </div>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <Button
+            variant="secondary"
+            disabled={!prevLessonId}
+            onClick={() => prevLessonId && router.push(`/learn/${params.courseId}/lesson/${prevLessonId}`)}
+          >
+            Previous
+          </Button>
+          <Button
+            variant="secondary"
+            disabled={!nextLessonId}
+            onClick={() => nextLessonId && router.push(`/learn/${params.courseId}/lesson/${nextLessonId}`)}
+          >
+            Next
+          </Button>
         </div>
         <div className="grid gap-4 lg:grid-cols-[1fr,320px]">
           <Card className="space-y-4">
