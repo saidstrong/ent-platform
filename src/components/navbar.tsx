@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { LogOut, Menu, Globe } from "lucide-react";
 import { useState } from "react";
 import { Button } from "./ui/button";
-import { useAuth, isAdmin } from "../lib/auth-context";
+import { useAuth, isAdmin, isTeacher } from "../lib/auth-context";
 import { useI18n } from "../lib/i18n";
 
 const NavLink = ({ href, label }: { href: string; label: string }) => {
@@ -32,12 +32,14 @@ export const Navbar = () => {
             <Menu size={18} />
           </button>
           <Link href="/" className="text-lg font-semibold text-blue-700">
-            ENT Academy
+            Coursolingo
           </Link>
           <nav className="hidden items-center gap-4 md:flex">
             <NavLink href="/courses" label={t("browseCourses")} />
+            {user && <NavLink href="/my-courses" label={t("myCourses")} />}
             {user && <NavLink href="/dashboard" label={t("dashboard")} />}
             {isAdmin(profile?.role) && <NavLink href="/admin" label={t("admin")} />}
+            {(isTeacher(profile?.role) || isAdmin(profile?.role)) && <NavLink href="/teacher" label="Teacher" />}
           </nav>
         </div>
         <div className="flex items-center gap-2">
@@ -72,8 +74,10 @@ export const Navbar = () => {
         <div className="border-b border-neutral-200 bg-white px-4 py-3 md:hidden">
           <div className="flex flex-col gap-3">
             <NavLink href="/courses" label={t("browseCourses")} />
+            {user && <NavLink href="/my-courses" label={t("myCourses")} />}
             {user && <NavLink href="/dashboard" label={t("dashboard")} />}
             {isAdmin(profile?.role) && <NavLink href="/admin" label={t("admin")} />}
+            {(isTeacher(profile?.role) || isAdmin(profile?.role)) && <NavLink href="/teacher" label="Teacher" />}
           </div>
         </div>
       )}

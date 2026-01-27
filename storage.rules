@@ -1,41 +1,133 @@
 rules_version = '2';
+
 service firebase.storage {
   match /b/{bucket}/o {
-    function isSignedIn() {
-      return request.auth != null;
+
+    // ---------- Helpers ----------
+    function isSignedIn() { return request.auth != null; }
+
+    function userDoc() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid));
     }
 
-    function userRole() {
-      return isSignedIn() ? firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role : null;
-    }
 
     function isAdmin() {
-      return userRole() == "admin";
+      return isSignedIn() && userDoc().data.role == "admin";
     }
 
     function isTeacher() {
-      return userRole() == "teacher";
+      return isSignedIn() && userDoc().data.role == "teacher";
+    }
+
+    // Enrollment doc id is deterministic: `${uid}_${courseId}`
+    function enrollmentPath(courseId) {
+      return /databases/(default)/documents/enrollments/$(request.auth.uid + "_" + courseId);
     }
 
     function hasActiveEnrollment(courseId) {
-      return isSignedIn() &&
-        firestore.exists(/databases/(default)/documents/enrollments/$(request.auth.uid + "_" + courseId)) &&
-        firestore.get(/databases/(default)/documents/enrollments/$(request.auth.uid + "_" + courseId)).data.status == "active";
+    return isSignedIn()
+        && firestore.exists(enrollmentPath(courseId))
+        && firestore.get(enrollmentPath(courseId)).data.status == "active";
+    }
+    
+    function isPdfOrImage() {
+      return request.resource.contentType == "application/pdf"
+        || request.resource.contentType.matches("image/.*");
     }
 
-    match /submissions/{uid}/{submissionId}/{fileName} {
-      allow write: if isSignedIn() && request.auth.uid == uid;
-      allow read: if isAdmin() || isTeacher() || (isSignedIn() && request.auth.uid == uid);
+    function isAllowedMaterialType() {
+      return request.resource.contentType == "application/pdf"
+        || request.resource.contentType == "application/vnd.ms-powerpoint"
+        || request.resource.contentType == "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        || request.resource.contentType == "application/msword"
+        || request.resource.contentType == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        || request.resource.contentType.matches("image/.*");
     }
 
-    match /payments/{uid}/{paymentId}/{fileName} {
-      allow write: if isSignedIn() && request.auth.uid == uid;
-      allow read: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
+    function isImageOnly() {
+      return request.resource.contentType.matches("image/.*");
     }
 
-    match /attachments/{courseId}/{lessonId}/{fileName} {
-      allow write: if isAdmin();
-      allow read: if isAdmin() || hasActiveEnrollment(courseId);
+    function isAllowedSubmissionType() {
+      return request.resource.contentType == "application/pdf"
+        || request.resource.contentType == "image/png"
+        || request.resource.contentType == "image/jpeg"
+        || request.resource.contentType == "image/jpg"
+        || request.resource.contentType == "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    }
+
+    // ---------- SUBMISSIONS ----------
+    // Storage path: submissions/{uid}/{assignmentId}/{filename}
+    match /submissions/{uid}/{assignmentId}/{filename} {
+      allow write: if isSignedIn()
+        && request.auth.uid == uid
+        && request.resource != null
+        // limit size: 20MB
+        && request.resource.size < 20 * 1024 * 1024
+        // allow pdf/png/jpg/jpeg/docx only
+        && isAllowedSubmissionType();
+
+      allow read: if isSignedIn()
+        && (request.auth.uid == uid || isAdmin() || isTeacher());
+    }
+
+    // ---------- PAYMENTS (proof) ----------
+    // Storage path: payments/{uid}/{paymentId}/{filename}
+    match /payments/{uid}/{paymentId}/{filename} {
+      allow write: if isSignedIn()
+        && request.auth.uid == uid
+        // limit size: 10MB
+        && request.resource.size < 10 * 1024 * 1024
+        // allow pdf/images only
+        && isPdfOrImage();
+
+      allow read: if isSignedIn()
+        && request.auth.uid == uid;
+    }
+
+    // ---------- LESSON ATTACHMENTS (materials) ----------
+    // Storage path: attachments/{courseId}/{lessonId}/{filename}
+    match /attachments/{courseId}/{lessonId}/{filename} {
+      // Only admin uploads materials
+      allow write: if (isAdmin() || isTeacher())
+        // limit size: 50MB (tune as you want)
+        && request.resource.size < 50 * 1024 * 1024
+        // allow common doc types + images
+        && isAllowedMaterialType();
+
+      // Read: admin/teacher OR enrolled students
+      allow read: if isAdmin()
+        || isTeacher()
+        || hasActiveEnrollment(courseId);
+    }
+
+    // ---------- LESSON RESOURCES ----------
+    // Storage path: lesson-resources/{courseId}/{lessonId}/{filename}
+    match /lesson-resources/{courseId}/{lessonId}/{filename} {
+      allow write: if (isAdmin() || isTeacher())
+        && request.resource.size < 50 * 1024 * 1024
+        && isAllowedMaterialType();
+
+      allow read: if isAdmin()
+        || isTeacher()
+        || hasActiveEnrollment(courseId);
+    }
+
+    // ---------- QUIZ IMAGES ----------
+    // Storage path: quiz-images/{courseId}/{lessonId}/{filename}
+    match /quiz-images/{courseId}/{lessonId}/{filename} {
+      allow write: if (isAdmin() || isTeacher())
+        && request.resource.size < 10 * 1024 * 1024
+        && isImageOnly();
+
+      allow read: if isAdmin()
+        || isTeacher()
+        || hasActiveEnrollment(courseId);
+    }
+
+    // ---------- Default deny ----------
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
   }
 }

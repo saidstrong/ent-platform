@@ -1,17 +1,23 @@
-import { RequireAdmin, RequireAuth } from "../../components/guards";
+import Link from "next/link";
+import { AdminGuard } from "../../components/guards";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
-    <RequireAuth>
-      <RequireAdmin>
-        <div className="mx-auto max-w-6xl px-4 py-8">
-          <div className="mb-4">
-            <p className="text-xs uppercase text-neutral-500">Admin</p>
-            <h1 className="text-2xl font-semibold">Control center</h1>
-          </div>
-          {children}
+    <AdminGuard>
+      <div className="mx-auto max-w-6xl px-4 py-8">
+        <div className="mb-4">
+          <p className="text-xs uppercase text-neutral-500">Admin</p>
+          <h1 className="text-2xl font-semibold">Control center</h1>
         </div>
-      </RequireAdmin>
-    </RequireAuth>
+        <div className="grid gap-6 lg:grid-cols-[200px,1fr]">
+          <aside className="space-y-2 text-sm">
+            <Link href="/admin/courses" className="block rounded-md bg-neutral-100 px-3 py-2 font-semibold text-neutral-700">
+              Courses
+            </Link>
+          </aside>
+          <div>{children}</div>
+        </div>
+      </div>
+    </AdminGuard>
   );
 }

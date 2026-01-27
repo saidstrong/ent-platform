@@ -55,22 +55,41 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   const signup = async ({ email, password, displayName, lang = "kz" }: { email: string; password: string; displayName: string; lang?: Language }) => {
-    const cred = await createUserWithEmailAndPassword(auth, email, password);
-    await updateProfile(cred.user, { displayName });
-    const profileDoc: UserProfile = {
-      uid: cred.user.uid,
-      role: "student",
-      displayName,
-      email,
-      createdAt: new Date().toISOString(),
-      lang,
-    };
-    await setDoc(doc(db, "users", cred.user.uid), { ...profileDoc, createdAt: serverTimestamp() });
-    setProfile(profileDoc);
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      await updateProfile(cred.user, { displayName });
+      const profileDoc: UserProfile = {
+        uid: cred.user.uid,
+        role: "student",
+        displayName,
+        email,
+        createdAt: new Date().toISOString(),
+        lang,
+      };
+      await setDoc(doc(db, "users", cred.user.uid), { ...profileDoc, createdAt: serverTimestamp() });
+      setProfile(profileDoc);
+    } catch (err: unknown) {
+      if (process.env.NODE_ENV !== "production") {
+        const error = err as { code?: string; message?: string; customData?: unknown };
+        console.error("[auth] signup failed", { code: error.code, message: error.message, customData: error.customData });
+      }
+      throw err;
+    }
   };
 
   const login = async (email: string, password: string) => {
-    await signInWithEmailAndPassword(auth, email, password);
+    if (!email || !password) {
+      throw new Error("Email and password are required.");
+    }
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (err: unknown) {
+      if (process.env.NODE_ENV !== "production") {
+        const error = err as { code?: string; message?: string; customData?: unknown };
+        console.error("[auth] login failed", { code: error.code, message: error.message, customData: error.customData });
+      }
+      throw err;
+    }
   };
 
   const logout = async () => {

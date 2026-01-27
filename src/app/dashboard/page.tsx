@@ -5,18 +5,19 @@ import { useEffect, useState } from "react";
 import Card from "../../components/ui/card";
 import Button from "../../components/ui/button";
 import { RequireAuth } from "../../components/guards";
-import { listEnrollments, fetchCourse } from "../../lib/data";
+import { listEnrollments, fetchCourse, fetchLessonsForModule, fetchModules, listProgressForCourse } from "../../lib/data";
 import { useAuth } from "../../lib/auth-context";
-import type { Course, Enrollment } from "../../lib/types";
+import type { Course, Enrollment, Progress, Lesson, Module } from "../../lib/types";
 
 type EnrollmentWithCourse = Enrollment & { course?: Course | null };
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const [items, setItems] = useState<EnrollmentWithCourse[]>([]);
+  const [nextLessonMap, setNextLessonMap] = useState<Record<string, string | null>>({});
 
   useEffect(() => {
-    if (!user) return;
+    if (loading || !user) return;
     listEnrollments(user.uid).then(async (enrolls) => {
       const enriched: EnrollmentWithCourse[] = [];
       for (const en of enrolls) {
@@ -24,7 +25,38 @@ export default function DashboardPage() {
       }
       setItems(enriched);
     });
-  }, [user]);
+  }, [user, loading]);
+
+  useEffect(() => {
+    if (!user) return;
+    const loadNext = async () => {
+      const mapping: Record<string, string | null> = {};
+      for (const item of items) {
+        if (item.status !== "active") {
+          mapping[item.courseId] = null;
+          continue;
+        }
+        const modules: Module[] = await fetchModules(item.courseId);
+        const lessonsByModule: Record<string, Lesson[]> = {};
+        for (const m of modules) {
+          lessonsByModule[m.id] = await fetchLessonsForModule(m.id, m.courseId || item.courseId);
+        }
+        const progressList = await listProgressForCourse(user.uid, item.courseId);
+        const progressMap: Record<string, Progress> = {};
+        progressList.forEach((p) => {
+          progressMap[p.lessonId] = p;
+        });
+        const orderedLessons: Lesson[] = [];
+        modules.forEach((m) => {
+          orderedLessons.push(...(lessonsByModule[m.id] || []));
+        });
+        const next = (orderedLessons.find((l) => progressMap[l.id]?.status !== "completed") || orderedLessons[0])?.id || null;
+        mapping[item.courseId] = next;
+      }
+      setNextLessonMap(mapping);
+    };
+    loadNext();
+  }, [items, user]);
 
   return (
     <RequireAuth>
@@ -54,9 +86,22 @@ export default function DashboardPage() {
                   </Button>
                 </Link>
                 {item.status === "active" ? (
-                  <Link href={`/learn/${item.courseId}`}>
-                    <Button size="sm">Open course</Button>
-                  </Link>
+                  <>
+                    <Link href={`/learn/${item.courseId}`}>
+                      <Button size="sm" variant="secondary">
+                        Course
+                      </Button>
+                    </Link>
+                    {nextLessonMap[item.courseId] ? (
+                      <Link href={`/learn/${item.courseId}/lesson/${nextLessonMap[item.courseId]}`}>
+                        <Button size="sm">Continue</Button>
+                      </Link>
+                    ) : (
+                      <Link href={`/learn/${item.courseId}`}>
+                        <Button size="sm">Start</Button>
+                      </Link>
+                    )}
+                  </>
                 ) : (
                   <Link href={`/checkout/${item.courseId}`}>
                     <Button size="sm">Finish payment</Button>

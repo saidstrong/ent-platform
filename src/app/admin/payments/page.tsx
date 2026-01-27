@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Button from "../../../components/ui/button";
 import Card from "../../../components/ui/card";
 import Input from "../../../components/ui/input";
@@ -14,13 +14,12 @@ type PaymentWithCourse = Payment & { course?: Course | null };
 export default function AdminPaymentsPage() {
   const { user } = useAuth();
   const [payments, setPayments] = useState<PaymentWithCourse[]>([]);
-  const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<"pending" | "approved" | "rejected">("pending");
   const [activePayment, setActivePayment] = useState<PaymentWithCourse | null>(null);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const load = () => {
+  const load = useCallback(() => {
     adminListPaymentsByStatus(filter).then(async (pays) => {
       const enriched: PaymentWithCourse[] = [];
       for (const p of pays) {
@@ -28,19 +27,11 @@ export default function AdminPaymentsPage() {
       }
       setPayments(enriched);
     });
-  };
-
-  useEffect(() => {
-    load();
   }, [filter]);
 
   useEffect(() => {
-    if (!activePayment) {
-      setNote("");
-      return;
-    }
-    setNote(activePayment.note ?? "");
-  }, [activePayment]);
+    load();
+  }, [load]);
 
   const applyReview = async (status: "approved" | "rejected") => {
     if (!activePayment) return;
@@ -63,6 +54,16 @@ export default function AdminPaymentsPage() {
       : status === "approved"
         ? "bg-green-50 text-green-700"
         : "bg-neutral-100 text-neutral-600";
+
+  const selectPayment = (payment: PaymentWithCourse) => {
+    setActivePayment(payment);
+    setNote(payment.note ?? "");
+  };
+
+  const closePayment = () => {
+    setActivePayment(null);
+    setNote("");
+  };
 
   const columns = useMemo(
     () => ["Created", "UID", "Course", "Status"],
@@ -96,7 +97,7 @@ export default function AdminPaymentsPage() {
             <button
               key={p.id}
               className="grid w-full grid-cols-4 gap-2 px-4 py-3 text-left text-sm hover:bg-neutral-50"
-              onClick={() => setActivePayment(p)}
+              onClick={() => selectPayment(p)}
               type="button"
             >
               <span className="text-neutral-600">{formatAnyTimestamp(p.createdAt)}</span>
@@ -114,7 +115,7 @@ export default function AdminPaymentsPage() {
           <Card className="w-full max-w-lg space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">Payment review</h3>
-              <Button size="sm" variant="ghost" onClick={() => setActivePayment(null)}>
+              <Button size="sm" variant="ghost" onClick={closePayment}>
                 Close
               </Button>
             </div>

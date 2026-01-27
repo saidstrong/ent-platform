@@ -1,17 +1,26 @@
 'use client';
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import Card from "../components/ui/card";
 import { fetchPublishedCourses } from "../lib/data";
+import { useAuth, isAdmin, isTeacher } from "../lib/auth-context";
 import { useI18n, pickLang } from "../lib/i18n";
 import type { Course } from "../lib/types";
 
 export default function Home() {
   const [courses, setCourses] = useState<Course[]>([]);
   const { t, lang } = useI18n();
+  const { user, profile, loading } = useAuth();
+
+  const primaryCta = useMemo(() => {
+    if (!user) return { href: "/signup", label: t("signup") };
+    if (isAdmin(profile?.role)) return { href: "/admin", label: t("admin") };
+    if (isTeacher(profile?.role)) return { href: "/teacher", label: "Teacher" };
+    return { href: "/my-courses", label: t("myCourses") };
+  }, [user, profile?.role, t]);
 
   useEffect(() => {
     fetchPublishedCourses().then(setCourses).catch(console.error);
@@ -30,9 +39,11 @@ export default function Home() {
               <Link href="/courses">
                 <Button>{t("browseCourses")}</Button>
               </Link>
-              <Link href="/signup">
-                <Button variant="secondary">{t("signup")}</Button>
-              </Link>
+              {!loading && (
+                <Link href={primaryCta.href}>
+                  <Button variant="secondary">{primaryCta.label}</Button>
+                </Link>
+              )}
             </div>
           </div>
           <div className="relative">
@@ -73,11 +84,19 @@ export default function Home() {
                 <Link href={`/courses/${course.id}`}>
                   <Button size="sm">Details</Button>
                 </Link>
-                <Link href={`/checkout/${course.id}`}>
-                  <Button variant="secondary" size="sm">
-                    {t("buyAccess")}
-                  </Button>
-                </Link>
+                {user ? (
+                  <Link href={`/my-courses`}>
+                    <Button variant="secondary" size="sm">
+                      {t("myCourses")}
+                    </Button>
+                  </Link>
+                ) : (
+                  <Link href={`/checkout/${course.id}`}>
+                    <Button variant="secondary" size="sm">
+                      {t("buyAccess")}
+                    </Button>
+                  </Link>
+                )}
               </div>
             </Card>
           ))}

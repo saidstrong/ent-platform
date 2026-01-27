@@ -9,7 +9,8 @@ const DICT: Dictionary = {
   landingTitle: { kz: "Онлайн білім орталығы", en: "Online Education Center" },
   landingSubtitle: { kz: "8 апталық ENT мат/физика бағдарламасы", en: "8-week ENT math/physics cohort" },
   browseCourses: { kz: "Курстарды қарау", en: "Browse courses" },
-  dashboard: { kz: "Менің курстарым", en: "My Courses" },
+  dashboard: { kz: "Бақылау тақтасы", en: "Dashboard" },
+  myCourses: { kz: "Менің курстарым", en: "My courses" },
   admin: { kz: "Әкімші", en: "Admin" },
   login: { kz: "Кіру", en: "Login" },
   signup: { kz: "Тіркелу", en: "Sign up" },
@@ -30,16 +31,15 @@ type I18nContextValue = {
 
 const I18nContext = createContext<I18nContextValue | undefined>(undefined);
 
-export const I18nProvider = ({ children }: { children: React.ReactNode }) => {
-  const [lang, setLangState] = useState<Language>(() => {
-    if (typeof window === "undefined") return "kz";
-    const stored = window.localStorage.getItem("lang") as Language | null;
-    return stored ?? "kz";
-  });
+export const I18nProvider = ({ children, initialLang }: { children: React.ReactNode; initialLang: Language }) => {
+  const [lang, setLangState] = useState<Language>(initialLang);
 
   const setLang = (next: Language) => {
     setLangState(next);
-    window.localStorage.setItem("lang", next);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("lang", next);
+      document.cookie = `lang=${next};path=/;max-age=${60 * 60 * 24 * 365}`;
+    }
   };
 
   const value = useMemo(

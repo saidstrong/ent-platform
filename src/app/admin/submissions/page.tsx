@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Button from "../../../components/ui/button";
 import Card from "../../../components/ui/card";
@@ -23,7 +23,7 @@ export default function AdminSubmissionsPage() {
   const [editing, setEditing] = useState<{ [id: string]: { feedback: string; grade: number | null } }>({});
   const [loading, setLoading] = useState(false);
 
-  const load = () => {
+  const load = useCallback(() => {
     const loader = courseFilter ? listSubmissionsForCourse(courseFilter) : listSubmissions();
     loader.then(async (subs) => {
       const enriched: SubmissionRow[] = [];
@@ -32,11 +32,11 @@ export default function AdminSubmissionsPage() {
       }
       setSubmissions(enriched);
     });
-  };
+  }, [courseFilter]);
 
   useEffect(() => {
     load();
-  }, [courseFilter]);
+  }, [load]);
 
   useEffect(() => {
     listAllCourses().then(setCourses).catch(() => null);

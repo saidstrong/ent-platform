@@ -7,7 +7,7 @@ import Card from "../../../components/ui/card";
 import Input from "../../../components/ui/input";
 import Select from "../../../components/ui/select";
 import Textarea from "../../../components/ui/textarea";
-import { listAllCourses, saveCourse } from "../../../lib/data";
+import { adminCreateCourse, adminListCourses, adminUpdateCourse } from "../../../lib/data";
 import type { Course, CourseCategory, CourseLevel } from "../../../lib/types";
 
 type CourseForm = {
@@ -45,7 +45,7 @@ export default function AdminCoursesPage() {
   const [error, setError] = useState<string | null>(null);
 
   const load = () => {
-    listAllCourses().then(setCourses);
+    adminListCourses().then(setCourses);
   };
 
   useEffect(() => {
@@ -57,7 +57,7 @@ export default function AdminCoursesPage() {
     setError(null);
     setLoading(true);
     try {
-      await saveCourse({
+      await adminCreateCourse({
         ...form,
         tags: form.tags.split(",").map((t: string) => t.trim()),
       });
@@ -72,7 +72,7 @@ export default function AdminCoursesPage() {
   };
 
   const togglePublish = async (course: Course) => {
-    await saveCourse({ id: course.id, published: !course.published });
+    await adminUpdateCourse(course.id, { published: !course.published });
     load();
   };
 

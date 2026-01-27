@@ -26,3 +26,15 @@ Minimal Next.js + Firebase MVP for the 8-week ENT Math/Physics course. Supports 
 - Enrollments use deterministic IDs `${uid}_${courseId}` to make rule checks fast.
 - Manual payment flow: student submits proof -> admin confirms -> enrollment becomes active.
 - Assignments link to lessons; submissions support text + file upload.
+- Backfill missing courseId on lessons/assignments (PowerShell):
+  ```powershell
+  $env:GOOGLE_APPLICATION_CREDENTIALS="$PWD\serviceAccountKey.json"
+  $env:FIREBASE_PROJECT_ID="ent-platform"
+  npx ts-node scripts/backfill-course-ids.ts --dry-run
+  ```
+- Provision an admin role for local dev (PowerShell):
+  ```powershell
+  $env:GOOGLE_APPLICATION_CREDENTIALS="$PWD\serviceAccountKey.json"
+  $env:FIREBASE_PROJECT_ID="ent-platform"
+  npx ts-node scripts/provision-admin.ts --uid ZIFwZNprKIdna160oYX9zr5nGvw2
+  ```

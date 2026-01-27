@@ -30,11 +30,19 @@ export default function CourseDetailPage() {
 
   useEffect(() => {
     if (loading || !user || !params?.courseId) return;
-    setCheckingAccess(true);
+    let active = true;
+    Promise.resolve().then(() => {
+      if (active) setCheckingAccess(true);
+    });
     getCourseAccessState(user.uid, params.courseId)
       .then(({ state }) => setAccessState(state))
       .catch(() => setAccessState("none"))
-      .finally(() => setCheckingAccess(false));
+      .finally(() => {
+        if (active) setCheckingAccess(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [user, loading, params?.courseId]);
 
   useEffect(() => {
@@ -70,16 +78,17 @@ export default function CourseDetailPage() {
       .catch((err) => console.error("[course] fetchModules failed", { courseId: params.courseId, err }));
   }, [params?.courseId, canReadContent]);
 
-  if (!course) return <p className="px-4 py-10 text-sm text-neutral-600">Loading course...</p>;
-
   const firstLessonId = useMemo(() => {
+    if (!course) return null;
     const orderedLessons: Lesson[] = [];
     modules.forEach((m) => {
       const ls = lessons[m.id] || [];
       orderedLessons.push(...ls);
     });
     return orderedLessons[0]?.id;
-  }, [modules, lessons]);
+  }, [modules, lessons, course]);
+
+  if (!course) return <p className="px-4 py-10 text-sm text-neutral-600">Loading course...</p>;
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-10">

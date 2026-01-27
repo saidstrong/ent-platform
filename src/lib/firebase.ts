@@ -1,6 +1,6 @@
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, setLogLevel } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
@@ -13,7 +13,15 @@ const firebaseConfig = {
 };
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+// Dev-only: surface the projectId to catch env mismatches.
+if (process.env.NODE_ENV !== "production") {
+  console.info("[firebase] projectId", app.options.projectId);
+}
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+
+if (process.env.NODE_ENV !== "production") {
+  setLogLevel("debug");
+}

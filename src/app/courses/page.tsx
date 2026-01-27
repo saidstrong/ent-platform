@@ -4,17 +4,53 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import Button from "../../components/ui/button";
 import Card from "../../components/ui/card";
-import { fetchPublishedCourses } from "../../lib/data";
+import { fetchPublishedCourses, getActiveEnrollment, getPaymentForCourse } from "../../lib/data";
+import { useAuth } from "../../lib/auth-context";
 import { useI18n, pickLang } from "../../lib/i18n";
-import type { Course } from "../../lib/types";
+import type { Course, Enrollment, Payment } from "../../lib/types";
 
 export default function CoursesPage() {
   const [courses, setCourses] = useState<Course[]>([]);
+  const [enrollments, setEnrollments] = useState<Record<string, Enrollment | null>>({});
+  const [payments, setPayments] = useState<Record<string, Payment | null>>({});
+  const [error, setError] = useState<string | null>(null);
   const { lang } = useI18n();
+  const { user, loading } = useAuth();
 
   useEffect(() => {
-    fetchPublishedCourses().then(setCourses).catch(console.error);
+    fetchPublishedCourses()
+      .then(setCourses)
+      .catch((err) => {
+        // Friendly fallback in case rules/config still block anonymous reads.
+        setError(err instanceof Error ? err.message : "Unable to load courses.");
+        setCourses([]);
+      });
   }, []);
+
+  useEffect(() => {
+    if (loading || !user || courses.length === 0) return;
+    const load = async () => {
+      const enrollmentMap: Record<string, Enrollment | null> = {};
+      const paymentMap: Record<string, Payment | null> = {};
+      for (const course of courses) {
+        try {
+          enrollmentMap[course.id] = await getActiveEnrollment(user.uid, course.id);
+        } catch {
+          // Treat permission errors as "no access" to keep UI stable.
+          enrollmentMap[course.id] = null;
+        }
+        try {
+          paymentMap[course.id] = await getPaymentForCourse(user.uid, course.id);
+        } catch {
+          // Treat permission errors as "no payment" to keep UI stable.
+          paymentMap[course.id] = null;
+        }
+      }
+      setEnrollments(enrollmentMap);
+      setPayments(paymentMap);
+    };
+    load();
+  }, [courses, user, loading]);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
@@ -23,6 +59,7 @@ export default function CoursesPage() {
         <h1 className="text-3xl font-semibold">Published catalog</h1>
         <p className="text-sm text-neutral-600">Browse available cohorts and request access.</p>
       </div>
+      {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
       <div className="grid gap-4 md:grid-cols-2">
         {courses.map((course) => (
           <Card key={course.id} className="flex flex-col gap-3">
@@ -36,11 +73,25 @@ export default function CoursesPage() {
               <Link href={`/courses/${course.id}`}>
                 <Button size="sm">Details</Button>
               </Link>
-              <Link href={`/checkout/${course.id}`}>
-                <Button variant="secondary" size="sm">
-                  Buy access ({course.price} {course.currency})
+              {enrollments[course.id] ? (
+                <Link href={`/learn/${course.id}`}>
+                  <Button size="sm">Continue</Button>
+                </Link>
+              ) : payments[course.id]?.status === "pending" ? (
+                <Button variant="secondary" size="sm" disabled>
+                  Under review
                 </Button>
-              </Link>
+              ) : payments[course.id]?.status === "approved" ? (
+                <Button variant="secondary" size="sm" disabled>
+                  Approved, updating access...
+                </Button>
+              ) : (
+                <Link href={`/checkout/${course.id}`}>
+                  <Button variant="secondary" size="sm">
+                    Buy access ({course.price} {course.currency})
+                  </Button>
+                </Link>
+              )}
             </div>
           </Card>
         ))}
