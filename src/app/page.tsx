@@ -32,7 +32,7 @@ export default function Home() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,#e0f2fe,transparent_35%),radial-gradient(circle_at_80%_0%,#dbeafe,transparent_30%)]" />
         <div className="relative grid gap-8 md:grid-cols-2 md:items-center">
           <div className="space-y-5">
-            <Badge>8-week ENT • Math & Physics</Badge>
+            <Badge>Welcome to</Badge>
             <h1 className="text-4xl font-semibold leading-tight md:text-5xl">{t("landingTitle")}</h1>
             <p className="max-w-2xl text-lg text-neutral-700">{t("landingSubtitle")}</p>
             <div className="flex flex-wrap gap-3">

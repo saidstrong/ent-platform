@@ -7,7 +7,7 @@ type Dictionary = Record<string, { kz: string; en: string }>;
 
 const DICT: Dictionary = {
   landingTitle: { kz: "Онлайн білім орталығы", en: "Online Education Center" },
-  landingSubtitle: { kz: "8 апталық ENT мат/физика бағдарламасы", en: "8-week ENT math/physics cohort" },
+  landingSubtitle: { kz: "", en: "" },
   browseCourses: { kz: "Курстарды қарау", en: "Browse courses" },
   dashboard: { kz: "Бақылау тақтасы", en: "Dashboard" },
   myCourses: { kz: "Менің курстарым", en: "My courses" },
