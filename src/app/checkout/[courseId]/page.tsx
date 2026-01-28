@@ -179,7 +179,7 @@ export default function CheckoutPage() {
           <div>
             <p className="text-sm font-semibold text-neutral-700">Kaspi instructions</p>
             <p className="text-sm text-neutral-600">
-              Pay via Kaspi to IBAN <strong>KZ0000</strong> with comment <strong>ENT {course?.id}</strong>. Upload a screenshot or enter the transaction
+              Pay via Kaspi to <strong>4400 4302 8060 1375</strong> with comment <strong>ENT {course?.id}</strong>. Upload a screenshot or enter the transaction
               comment so admin can confirm.
             </p>
           </div>
