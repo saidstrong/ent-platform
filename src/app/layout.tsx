@@ -11,6 +11,11 @@ const manrope = Manrope({ subsets: ["latin"], variable: "--font-sans" });
 export const metadata: Metadata = {
   title: "XY-School",
   description: "Online education center for ENT Math/Physics cohorts",
+  icons: {
+    icon: "/favicon.ico",              // browser tab
+    shortcut: "/favicon.ico",
+    apple: "/apple-touch-icon.png",    // iOS
+  },
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
