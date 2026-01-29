@@ -220,7 +220,8 @@ const EN = {
   },
 } as const;
 
-type Dictionary = typeof EN;
+type Widen<T> = T extends string ? string : { [K in keyof T]: Widen<T[K]> };
+type Dictionary = Widen<typeof EN>;
 
 const KZ: Dictionary = {
   nav: {
