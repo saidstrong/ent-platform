@@ -10,7 +10,7 @@ const manrope = Manrope({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
   title: "XY-School",
-  description: "Online education center for ENT Math/Physics cohorts",
+  description: "Online education center",
   icons: {
     icon: "/favicon.ico",              // browser tab
     shortcut: "/favicon.ico",
