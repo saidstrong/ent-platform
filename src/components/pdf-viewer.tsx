@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Button from "./ui/button";
+import { useI18n } from "../lib/i18n";
 
 type PdfViewerProps = {
   url: string;
@@ -12,6 +13,7 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 
 export const PdfViewer = ({ url, title }: PdfViewerProps) => {
   const [zoom, setZoom] = useState<number>(1);
+  const { t } = useI18n();
 
   useEffect(() => {
     if (process.env.NODE_ENV !== "production") {
@@ -22,7 +24,7 @@ export const PdfViewer = ({ url, title }: PdfViewerProps) => {
   if (!url) {
     return (
       <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-600">
-        PDF preview unavailable.
+        {t("pdf.previewUnavailable")}
       </div>
     );
   }
@@ -39,7 +41,7 @@ export const PdfViewer = ({ url, title }: PdfViewerProps) => {
   return (
     <div className="space-y-3 w-full max-w-full overflow-x-hidden">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="text-sm font-semibold text-neutral-700">{title || "PDF preview"}</div>
+        <div className="text-sm font-semibold text-neutral-700">{title || t("pdf.title")}</div>
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" variant="secondary" onClick={() => setZoom((z) => clamp(z - 0.1, 0.7, 2))}>
             -
@@ -50,10 +52,10 @@ export const PdfViewer = ({ url, title }: PdfViewerProps) => {
           </Button>
           <span className="mx-2 text-xs text-neutral-400">|</span>
           <a className="text-xs text-blue-700" href={url} target="_blank" rel="noreferrer">
-            Open
+            {t("pdf.openInNewTab")}
           </a>
           <a className="text-xs text-blue-700" href={url} target="_blank" rel="noreferrer" download>
-            Download
+            {t("pdf.download")}
           </a>
         </div>
       </div>
@@ -61,7 +63,7 @@ export const PdfViewer = ({ url, title }: PdfViewerProps) => {
         <div className="mx-auto w-full max-w-[860px] min-w-0 overflow-hidden rounded-lg bg-white shadow">
           <iframe
             src={iframeSrc}
-            title={title || "PDF preview"}
+            title={title || t("pdf.title")}
             className="block w-full max-w-full border-0 rounded-lg h-[70vh] md:h-[85vh]"
           />
         </div>

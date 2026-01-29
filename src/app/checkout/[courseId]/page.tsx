@@ -24,7 +24,7 @@ export default function CheckoutPage() {
   const params = useParams<{ courseId: string }>();
   const router = useRouter();
   const { user, profile } = useAuth();
-  const { lang } = useI18n();
+  const { lang, t } = useI18n();
   const [course, setCourse] = useState<Course | null>(null);
   const [paymentId, setPaymentId] = useState<string | null>(null);
   const [accessState, setAccessState] = useState<"enrolled" | "pending" | "approved_waiting_enrollment" | "none">("none");
@@ -98,7 +98,7 @@ export default function CheckoutPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) {
-      setError("You must be signed in to submit a payment proof.");
+      setError(t("checkout.signInRequired"));
       setErrorCode(null);
       if (process.env.NODE_ENV !== "production") {
         console.info("[checkout] submit blocked: not authenticated");
@@ -124,14 +124,14 @@ export default function CheckoutPage() {
         return;
       }
       if (access.state === "pending") {
-        setError("Your payment is already under review.");
+        setError(t("checkout.alreadyUnderReview"));
         if (file && access.paymentId) {
           await uploadPaymentProof(user.uid, access.paymentId, file);
         }
         return;
       }
       if (access.state === "approved_waiting_enrollment") {
-        setError("Approved, updating access...");
+        setError(t("checkout.approvedUpdating"));
         return;
       }
       const created = await createPayment({ uid: user.uid, courseId: params.courseId, note: proofText });
@@ -145,9 +145,9 @@ export default function CheckoutPage() {
       const message = err instanceof Error ? err.message : "Failed to submit payment proof";
       const code = typeof err === "object" && err !== null && "code" in err ? String((err as { code?: string }).code) : null;
       if (message === "ALREADY_PURCHASED") {
-        setError("You already own this course.");
+        setError(t("checkout.alreadyOwned"));
       } else if (message === "PAYMENT_EXISTS") {
-        setError("You already have a payment for this course.");
+        setError(t("checkout.paymentExists"));
       } else {
         setError(message);
       }
@@ -171,29 +171,30 @@ export default function CheckoutPage() {
     <RequireAuth>
       <div className="mx-auto max-w-3xl px-4 py-10">
         <Link href={`/courses/${params.courseId}`} className="text-sm text-blue-700">
-          &lt; Back to course
+          &lt; {t("buttons.backToCourse")}
         </Link>
-        <h1 className="mt-2 text-3xl font-semibold">Manual payment</h1>
+        <h1 className="mt-2 text-3xl font-semibold">{t("checkout.manualPayment")}</h1>
         {course && <p className="text-sm text-neutral-600">{pickLang(course.title_kz, course.title_en, lang)}</p>}
         <Card className="mt-4 space-y-4">
           <div>
-            <p className="text-sm font-semibold text-neutral-700">Kaspi instructions</p>
+            <p className="text-sm font-semibold text-neutral-700">{t("checkout.instructionsTitle")}</p>
             <p className="text-sm text-neutral-600">
-              Pay via Kaspi to <strong>4400 4302 8060 1375</strong> with comment <strong>ENT {course?.id}</strong>. Upload a screenshot or enter the transaction
-              comment so admin can confirm.
+              {t("checkout.instructionsBody")
+                .replace("{number}", "4400 4302 8060 1375")
+                .replace("{comment}", `ENT ${course?.id ?? ""}`)}
             </p>
           </div>
           <form className="space-y-4" onSubmit={submit}>
             <div>
-              <label className="text-sm font-semibold text-neutral-700">Amount</label>
+              <label className="text-sm font-semibold text-neutral-700">{t("checkout.amount")}</label>
               <Input value={course ? `${course.price} ${course.currency}` : ""} disabled />
             </div>
             <div>
-              <label className="text-sm font-semibold text-neutral-700">Proof / comment</label>
-              <Textarea value={proofText} onChange={(e) => setProofText(e.target.value)} placeholder="Kaspi comment, payer name, etc." required />
+              <label className="text-sm font-semibold text-neutral-700">{t("checkout.proofLabel")}</label>
+              <Textarea value={proofText} onChange={(e) => setProofText(e.target.value)} placeholder={t("checkout.proofPlaceholder")} required />
             </div>
             <div>
-              <label className="text-sm font-semibold text-neutral-700">Attach screenshot (optional)</label>
+              <label className="text-sm font-semibold text-neutral-700">{t("checkout.attachScreenshot")}</label>
               <Input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
             </div>
             {error && (
@@ -202,10 +203,10 @@ export default function CheckoutPage() {
                 {process.env.NODE_ENV !== "production" && errorCode ? ` (${errorCode})` : ""}
               </p>
             )}
-            {accessState === "pending" && <p className="text-sm text-amber-700">Under review. Please wait for approval.</p>}
-            {accessState === "approved_waiting_enrollment" && <p className="text-sm text-amber-700">Approved, updating access...</p>}
+            {accessState === "pending" && <p className="text-sm text-amber-700">{t("checkout.underReview")}</p>}
+            {accessState === "approved_waiting_enrollment" && <p className="text-sm text-amber-700">{t("checkout.approvedUpdating")}</p>}
             <Button type="submit" disabled={loading}>
-              {loading ? "Submitting..." : "Submit for review"}
+              {loading ? t("checkout.submitting") : t("checkout.submitForReview")}
             </Button>
           </form>
         </Card>

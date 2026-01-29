@@ -13,7 +13,7 @@ import type { Course, Lesson, Module } from "../../../lib/types";
 export default function CoursePlayerPage() {
   const params = useParams<{ courseId: string }>();
   const router = useRouter();
-  const { lang } = useI18n();
+  const { lang, t } = useI18n();
   const { user, profile, loading } = useAuth();
   const [course, setCourse] = useState<Course | null>(null);
   const [modules, setModules] = useState<Module[]>([]);
@@ -34,7 +34,7 @@ export default function CoursePlayerPage() {
     fetchCourse(params.courseId)
       .then(setCourse)
       .catch((err) => {
-        setError(err instanceof Error ? err.message : "Failed to load course.");
+        setError(err instanceof Error ? err.message : t("errors.loadFailed"));
         console.error("[learn] fetchCourse failed", { courseId: params.courseId, err });
       })
       .finally(() => {
@@ -43,7 +43,7 @@ export default function CoursePlayerPage() {
     return () => {
       active = false;
     };
-  }, [params?.courseId]);
+  }, [params?.courseId, t]);
 
   useEffect(() => {
     if (!params?.courseId || loading || !user) return;
@@ -74,7 +74,7 @@ export default function CoursePlayerPage() {
         setLessons(entries);
       })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : "Failed to load syllabus.");
+        setError(err instanceof Error ? err.message : t("errors.loadFailed"));
         console.error("[learn] fetchModules failed", { courseId: params.courseId, err });
       })
       .finally(() => {
@@ -83,7 +83,7 @@ export default function CoursePlayerPage() {
     return () => {
       active = false;
     };
-  }, [params?.courseId, accessState, profile?.role]);
+  }, [params?.courseId, accessState, profile?.role, t]);
 
   useEffect(() => {
     if (!user || loading || !params?.courseId) return;
@@ -113,7 +113,7 @@ export default function CoursePlayerPage() {
 
   const firstLessonId = orderedLessons[0]?.id ?? null;
   const currentLessonId = lastLessonId || firstLessonId;
-  const currentLessonLabel = lastLessonId ? "Resume from last lesson" : "Start from first lesson";
+  const currentLessonLabel = lastLessonId ? t("course.resumeFromLast") : t("course.startFromFirst");
 
   const progressSummary = useMemo(() => {
     const total = orderedLessons.length;
@@ -126,14 +126,14 @@ export default function CoursePlayerPage() {
     <RequireEnrollment courseId={params.courseId}>
       <div className="mx-auto max-w-6xl px-4 py-8">
         <div className="mb-4">
-          <p className="text-xs uppercase text-neutral-500">Course player</p>
+          <p className="text-xs uppercase text-neutral-500">{t("learn.title")}</p>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-semibold">{course ? pickLang(course.title_kz, course.title_en, lang) : "Course"}</h1>
+              <h1 className="text-2xl font-semibold">{course ? pickLang(course.title_kz, course.title_en, lang) : t("learn.title")}</h1>
               {course && <p className="text-sm text-neutral-600">{pickLang(course.description_kz, course.description_en, lang)}</p>}
             </div>
             <div className="text-xs text-neutral-500">
-              Progress: {progressSummary.completed}/{progressSummary.total} ({progressSummary.percent}%)
+              {t("learn.progress")}: {progressSummary.completed}/{progressSummary.total} ({progressSummary.percent}%)
             </div>
             {accessState === "enrolled" || isAdmin(profile?.role) || isTeacher(profile?.role) ? (
               currentLessonId ? (
@@ -141,23 +141,23 @@ export default function CoursePlayerPage() {
                   className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
                   onClick={() => router.push(`/learn/${params.courseId}/lesson/${currentLessonId}`)}
                 >
-                  Continue
+                  {t("buttons.continueLearning")}
                 </button>
               ) : (
                 <button className="rounded-md bg-blue-100 px-4 py-2 text-sm font-semibold text-blue-700" disabled>
-                  Course has no lessons yet
+                  {t("course.noLessons")}
                 </button>
               )
             ) : accessState === "pending" ? (
               <button className="rounded-md bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-700" disabled>
-                Under review
+                {t("course.pendingReview")}
               </button>
             ) : (
               <button
                 className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
                 onClick={() => router.push(`/checkout/${params.courseId}`)}
               >
-                Buy / Upload proof
+                {t("buttons.getAccess")}
               </button>
             )}
           </div>
@@ -165,16 +165,12 @@ export default function CoursePlayerPage() {
             <p className="mt-2 text-xs text-neutral-500">{currentLessonLabel}</p>
           )}
         </div>
-        {!user && !loading && (
-          <Card className="mb-4 text-sm text-neutral-600">
-            Please sign in to access this course.
-          </Card>
-        )}
-        {loadingCourse && <p className="text-sm text-neutral-500">Loading course...</p>}
+        {!user && !loading && <Card className="mb-4 text-sm text-neutral-600">{t("errors.signInRequired")}</Card>}
+        {loadingCourse && <p className="text-sm text-neutral-500">{t("auth.loading")}</p>}
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="grid gap-4 lg:grid-cols-[320px,1fr]">
           <Card className="space-y-3">
-            <p className="text-sm font-semibold text-neutral-700">Modules & lessons</p>
+            <p className="text-sm font-semibold text-neutral-700">{t("course.syllabus")}</p>
             <div className="h-2 w-full overflow-hidden rounded-full bg-neutral-100">
               <div className="h-full bg-blue-600" style={{ width: `${progressSummary.percent}%` }} />
             </div>
@@ -190,24 +186,24 @@ export default function CoursePlayerPage() {
                           <span
                             className={`text-xs font-semibold ${completedLessons.includes(lesson.id) ? "text-green-700" : "text-neutral-500"}`}
                           >
-                            {completedLessons.includes(lesson.id) ? "Completed" : "Not completed"}
+                            {completedLessons.includes(lesson.id) ? t("buttons.completed") : t("lesson.notCompleted")}
                           </span>
                           <Link href={`/learn/${params.courseId}/lesson/${lesson.id}`} className="text-blue-700">
-                            Open
+                            {t("buttons.open")}
                           </Link>
                         </div>
                       </div>
                     ))}
-                    {(lessons[m.id] || []).length === 0 && <p className="text-xs text-neutral-500">No lessons yet.</p>}
+                    {(lessons[m.id] || []).length === 0 && <p className="text-xs text-neutral-500">{t("course.noLessons")}</p>}
                   </div>
                 </div>
               ))}
-              {loadingOutline && <p className="text-sm text-neutral-600">Loading syllabus...</p>}
-              {!loadingOutline && modules.length === 0 && <p className="text-sm text-neutral-600">Course has no lessons yet.</p>}
+              {loadingOutline && <p className="text-sm text-neutral-600">{t("auth.loading")}</p>}
+              {!loadingOutline && modules.length === 0 && <p className="text-sm text-neutral-600">{t("learn.noLessons")}</p>}
             </div>
           </Card>
           <Card className="flex min-h-[320px] items-center justify-center text-center text-neutral-600">
-            Select a lesson on the left to start learning.
+            {t("learn.selectLesson")}
           </Card>
         </div>
       </div>

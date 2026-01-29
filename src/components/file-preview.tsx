@@ -1,6 +1,7 @@
 'use client';
 
 import Link from "next/link";
+import { useI18n } from "../lib/i18n";
 
 type FilePreviewProps = {
   url: string;
@@ -30,9 +31,10 @@ const getKind = (contentType: string) => {
 };
 
 export default function FilePreview({ url, filename, contentType, maxHeight = 200 }: FilePreviewProps) {
+  const { t } = useI18n();
   const resolvedType = contentType || inferContentType(url);
   const kind = getKind(resolvedType);
-  const label = filename || url.split("?")[0].split("/").pop() || "Open file";
+  const label = filename || url.split("?")[0].split("/").pop() || t("pdf.openFile");
 
   if (kind === "image") {
     return (
@@ -40,7 +42,7 @@ export default function FilePreview({ url, filename, contentType, maxHeight = 20
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={url} alt={label} style={{ maxHeight }} className="w-auto rounded-md border border-neutral-200" />
         <Link href={url} className="text-xs text-blue-700" target="_blank" rel="noreferrer">
-          Open
+          {t("buttons.open")}
         </Link>
       </div>
     );
@@ -51,11 +53,11 @@ export default function FilePreview({ url, filename, contentType, maxHeight = 20
       <div className="space-y-2">
         <object data={url} type="application/pdf" className="h-[240px] w-full rounded-md border border-neutral-200">
           <Link href={url} className="text-xs text-blue-700" target="_blank" rel="noreferrer">
-            Open PDF
+            {t("pdf.openPdf")}
           </Link>
         </object>
         <Link href={url} className="text-xs text-blue-700" target="_blank" rel="noreferrer">
-          Open
+          {t("buttons.open")}
         </Link>
       </div>
     );
@@ -68,7 +70,7 @@ export default function FilePreview({ url, filename, contentType, maxHeight = 20
           <source src={url} type={resolvedType} />
         </video>
         <Link href={url} className="text-xs text-blue-700" target="_blank" rel="noreferrer">
-          Open
+          {t("buttons.open")}
         </Link>
       </div>
     );
@@ -78,7 +80,7 @@ export default function FilePreview({ url, filename, contentType, maxHeight = 20
     <div className="flex items-center gap-2 text-sm">
       <span className="text-neutral-700">{label}</span>
       <Link href={url} className="text-blue-700" target="_blank" rel="noreferrer">
-        Open
+        {t("buttons.open")}
       </Link>
     </div>
   );

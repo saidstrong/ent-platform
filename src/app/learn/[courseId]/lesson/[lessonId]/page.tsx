@@ -46,7 +46,7 @@ const PdfViewer = dynamicImport(() => import("../../../../../components/pdf-view
 export default function LessonPage() {
   const params = useParams<{ courseId: string; lessonId: string }>();
   const router = useRouter();
-  const { lang } = useI18n();
+  const { lang, t } = useI18n();
   const { user, profile, loading } = useAuth();
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [loadingLesson, setLoadingLesson] = useState(false);
@@ -128,7 +128,7 @@ export default function LessonPage() {
       })
       .catch((err) => {
         if (!active) return;
-        setQuizError(err instanceof Error ? err.message : "Failed to load quiz.");
+        setQuizError(err instanceof Error ? err.message : t("lesson.quizLoadFailed"));
       });
     fetchMyQuizAttempt(user.uid, lesson.id)
       .then((attempt) => {
@@ -293,7 +293,7 @@ export default function LessonPage() {
               <iframe className="h-full w-full" src={embedUrl} title={resource.name} allowFullScreen />
             </div>
             <a className="text-sm text-blue-700" href={linkUrl || ""} target="_blank" rel="noreferrer">
-              Open on YouTube
+              {t("lesson.openOnYouTube")}
             </a>
           </div>
         );
@@ -308,11 +308,11 @@ export default function LessonPage() {
         {linkUrl && (
           <>
             <a className="text-blue-700" href={linkUrl} target="_blank" rel="noreferrer">
-              Open
+              {t("buttons.open")}
             </a>
             {resource.kind === "file" && (
               <a className="text-blue-700" href={linkUrl} target="_blank" rel="noreferrer" download>
-                Download
+                {t("buttons.download")}
               </a>
             )}
           </>
@@ -334,7 +334,7 @@ export default function LessonPage() {
       });
       setQuizAttempt(attempt);
     } catch (err) {
-      setQuizError(err instanceof Error ? err.message : "Failed to submit quiz.");
+      setQuizError(err instanceof Error ? err.message : t("lesson.quizSubmitFailed"));
     } finally {
       setQuizSubmitting(false);
     }
@@ -357,18 +357,16 @@ export default function LessonPage() {
     <RequireEnrollment courseId={params.courseId}>
       <div className="mx-auto max-w-5xl px-4 py-8">
         <div className="mb-4">
-          <Link href={`/learn/${params.courseId}`} className="text-sm text-blue-700">
-            &lt; Back to course
-          </Link>
-          <h1 className="text-3xl font-semibold">{lesson ? pickLang(lesson.title_kz, lesson.title_en, lang) : "Lesson"}</h1>
+        <Link href={`/learn/${params.courseId}`} className="text-sm text-blue-700">
+          &lt; {t("buttons.backToCourse")}
+        </Link>
+        <h1 className="text-3xl font-semibold">{lesson ? pickLang(lesson.title_kz, lesson.title_en, lang) : t("lesson.title")}</h1>
           {course && <p className="text-sm text-neutral-600">{pickLang(course.title_kz, course.title_en, lang)}</p>}
         </div>
         <div className="grid gap-4 lg:grid-cols-[1fr,320px]">
           <Card className="space-y-4">
-            {loadingLesson && <p className="text-sm text-neutral-600">Loading lesson...</p>}
-            {!loadingLesson && !lesson && (
-              <p className="text-sm text-neutral-600">Lesson not found.</p>
-            )}
+            {loadingLesson && <p className="text-sm text-neutral-600">{t("lesson.loading")}</p>}
+            {!loadingLesson && !lesson && <p className="text-sm text-neutral-600">{t("lesson.notFound")}</p>}
             {lesson?.type === "video" && lesson.videoUrl && (
               (() => {
                 const embedUrl = getYouTubeEmbedUrl(lesson.videoUrl);
@@ -381,9 +379,9 @@ export default function LessonPage() {
                 }
                 return (
                   <div className="rounded-md border border-neutral-200 bg-neutral-50 p-4 text-sm">
-                    <p className="text-neutral-700">Video link</p>
+                    <p className="text-neutral-700">{t("lesson.videoLink")}</p>
                     <a className="text-blue-700" href={lesson.videoUrl} target="_blank" rel="noreferrer">
-                      Open video
+                      {t("lesson.openVideo")}
                     </a>
                   </div>
                 );
@@ -399,7 +397,7 @@ export default function LessonPage() {
             )}
             {lesson?.attachments && lesson.attachments.length > 0 && (
               <div className="space-y-2">
-                <p className="text-sm font-semibold">Attachments</p>
+                <p className="text-sm font-semibold">{t("lesson.attachments")}</p>
                 <div className="space-y-2">
                   {lesson.attachments.map((file) =>
                     isPdfUrl(file.url) ? (
@@ -413,7 +411,7 @@ export default function LessonPage() {
             )}
             {lesson?.resources && lesson.resources.length > 0 && (
               <div className="space-y-2">
-                <p className="text-sm font-semibold">Resources</p>
+                <p className="text-sm font-semibold">{t("lesson.resources")}</p>
                 <div className="space-y-2">
                   {lesson.resources.map((resource, idx) => (
                     <div key={resource.id || `${resource.kind}-${resource.url || resource.name}-${idx}`} className="min-w-0">
@@ -427,17 +425,17 @@ export default function LessonPage() {
               <div className="space-y-3 rounded-lg border border-neutral-200 p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-semibold">Quiz</p>
+                    <p className="text-sm font-semibold">{t("lesson.quizTitle")}</p>
                     {quizCompleted && quizAttempt && (
                       <p className="text-xs text-neutral-600">
-                        Score: {quizAttempt.pointsEarned}/{quizAttempt.pointsMax} ({quizAttempt.percent}%)
+                        {t("lesson.score")}: {quizAttempt.pointsEarned}/{quizAttempt.pointsMax} ({quizAttempt.percent}%)
                       </p>
                     )}
                   </div>
                   {quizError && <span className="text-xs text-red-600">{quizError}</span>}
                 </div>
-                {!user && <p className="text-sm text-neutral-600">Please sign in to access the quiz.</p>}
-                {user && !quizReady && <p className="text-sm text-neutral-600">No quiz configured.</p>}
+                {!user && <p className="text-sm text-neutral-600">{t("lesson.signInQuiz")}</p>}
+                {user && !quizReady && <p className="text-sm text-neutral-600">{t("lesson.noQuiz")}</p>}
                 {user && quizReady && quiz && (
                   <div className="space-y-4">
                     {quiz.questions.map((question) => {
@@ -450,7 +448,7 @@ export default function LessonPage() {
                             <p className="text-sm font-medium">{prompt}</p>
                             {quizCompleted && result && (
                               <span className="text-xs text-neutral-600">
-                                {result.earnedPoints}/{result.maxPoints} {result.isCorrect ? "Correct" : "Checked"}
+                                {result.earnedPoints}/{result.maxPoints} {result.isCorrect ? t("lesson.correct") : t("lesson.checkedLabel")}
                               </span>
                             )}
                           </div>
@@ -476,7 +474,7 @@ export default function LessonPage() {
                                     <span>{pickLang(opt.text_kz, opt.text_en, lang)}</span>
                                     {opt.imageUrl && (
                                       <a className="text-xs text-blue-700" href={opt.imageUrl} target="_blank" rel="noreferrer">
-                                        Image
+                                        {t("lesson.image")}
                                       </a>
                                     )}
                                   </label>
@@ -513,7 +511,7 @@ export default function LessonPage() {
                                     <span>{pickLang(opt.text_kz, opt.text_en, lang)}</span>
                                     {opt.imageUrl && (
                                       <a className="text-xs text-blue-700" href={opt.imageUrl} target="_blank" rel="noreferrer">
-                                        Image
+                                        {t("lesson.image")}
                                       </a>
                                     )}
                                   </label>
@@ -523,7 +521,7 @@ export default function LessonPage() {
                           )}
                           {question.type === "short" && (
                             <Input
-                              placeholder="Your answer"
+                              placeholder={t("lesson.yourAnswer")}
                               value={selectedAnswer?.type === "short" ? selectedAnswer.value : ""}
                               disabled={quizCompleted}
                               onChange={(e) =>
@@ -555,7 +553,7 @@ export default function LessonPage() {
                                         }))
                                       }
                                     >
-                                      <option value="">Select match</option>
+                                      <option value="">{t("lesson.selectMatch")}</option>
                                       {question.right.map((rightItem) => (
                                         <option key={rightItem.id} value={rightItem.id}>
                                           {pickLang(rightItem.text_kz, rightItem.text_en, lang)}
@@ -572,10 +570,10 @@ export default function LessonPage() {
                     })}
                     {!quizCompleted && (
                       <Button onClick={submitQuiz} disabled={!quizAnswered || quizSubmitting}>
-                        {quizSubmitting ? "Submitting..." : "Submit quiz"}
+                        {quizSubmitting ? t("lesson.submitting") : t("lesson.submitQuiz")}
                       </Button>
                     )}
-                    {quizCompleted && <p className="text-xs text-neutral-500">Quiz submitted.</p>}
+                    {quizCompleted && <p className="text-xs text-neutral-500">{t("lesson.quizSubmitted")}</p>}
                   </div>
                 )}
               </div>
@@ -586,32 +584,32 @@ export default function LessonPage() {
                 disabled={!prevLessonId}
                 onClick={() => prevLessonId && router.push(`/learn/${params.courseId}/lesson/${prevLessonId}`)}
               >
-                Previous
+                {t("lesson.previous")}
               </Button>
               <Button
                 variant="secondary"
                 disabled={!nextLessonId}
                 onClick={() => nextLessonId && router.push(`/learn/${params.courseId}/lesson/${nextLessonId}`)}
               >
-                Next
+                {t("lesson.next")}
               </Button>
               {completedLessons.includes(params.lessonId) ? (
                 <Button onClick={unmarkCompleted} disabled={savingComplete}>
-                  {savingComplete ? "Saving..." : "Completed (undo)"}
+                  {savingComplete ? t("lesson.saving") : t("lesson.completedUndo")}
                 </Button>
               ) : (
                 <Button onClick={markCompleted} disabled={savingComplete}>
-                  {savingComplete ? "Saving..." : "Mark completed"}
+                  {savingComplete ? t("lesson.saving") : t("buttons.markCompleted")}
                 </Button>
               )}
             </div>
             <div className="space-y-2">
               {assignment ? (
                 <Link href={`/assignment/${assignment.id}`}>
-                  <Button fullWidth>Go to homework</Button>
+                  <Button fullWidth>{t("buttons.goToHomework")}</Button>
                 </Link>
               ) : (
-                <p className="text-sm text-neutral-600">No homework for this lesson.</p>
+                <p className="text-sm text-neutral-600">{t("lesson.noHomework")}</p>
               )}
             </div>
           </Card>
@@ -619,15 +617,15 @@ export default function LessonPage() {
             <Card className="space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs uppercase text-neutral-500">Syllabus</p>
-                  <p className="text-sm text-neutral-700">Modules & lessons</p>
+                  <p className="text-xs uppercase text-neutral-500">{t("lesson.syllabusTitle")}</p>
+                  <p className="text-sm text-neutral-700">{t("lesson.modulesLessons")}</p>
                 </div>
                 <Button variant="secondary" size="sm" onClick={() => router.push(`/learn/${params.courseId}`)}>
-                  Back to course
+                  {t("buttons.backToCourse")}
                 </Button>
               </div>
               {modules.length === 0 && (
-                <p className="text-sm text-neutral-600">Course has no lessons yet.</p>
+                <p className="text-sm text-neutral-600">{t("course.noLessons")}</p>
               )}
               <div className="space-y-3">
                 {modules.map((mod) => (
@@ -649,13 +647,13 @@ export default function LessonPage() {
                           >
                             <span>{pickLang(item.title_kz, item.title_en, lang)}</span>
                             <span className={`text-xs font-semibold ${isCompleted ? "text-green-700" : "text-neutral-500"}`}>
-                              {isCompleted ? "Completed" : "Not completed"}
+                              {isCompleted ? t("buttons.completed") : t("lesson.notCompleted")}
                             </span>
                           </button>
                         );
                       })}
                       {(lessonsByModule[mod.id] || []).length === 0 && (
-                        <p className="text-xs text-neutral-500">No lessons yet.</p>
+                        <p className="text-xs text-neutral-500">{t("course.noLessons")}</p>
                       )}
                     </div>
                   </div>

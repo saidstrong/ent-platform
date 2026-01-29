@@ -28,18 +28,18 @@ export const Navbar = () => {
     <header className="sticky top-0 z-20 w-full max-w-full overflow-x-hidden border-b border-neutral-200 bg-white/70 backdrop-blur">
       <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-3 py-3 sm:px-4 md:py-4">
         <div className="flex min-w-0 items-center gap-3">
-          <button className="rounded-md border border-neutral-200 p-2 md:hidden" onClick={() => setOpen((v) => !v)} aria-label="Toggle menu">
+          <button className="rounded-md border border-neutral-200 p-2 md:hidden" onClick={() => setOpen((v) => !v)} aria-label={t("nav.toggleMenu")}>
             <Menu size={18} />
           </button>
           <Link href="/" className="truncate text-lg font-semibold text-blue-700">
             XY-School
           </Link>
           <nav className="hidden items-center gap-4 md:flex">
-            <NavLink href="/courses" label={t("browseCourses")} />
-            {user && <NavLink href="/my-courses" label={t("myCourses")} />}
-            {user && <NavLink href="/dashboard" label={t("dashboard")} />}
-            {isAdmin(profile?.role) && <NavLink href="/admin" label={t("admin")} />}
-            {(isTeacher(profile?.role) || isAdmin(profile?.role)) && <NavLink href="/teacher" label="Teacher" />}
+            <NavLink href="/courses" label={t("nav.courses")} />
+            {user && <NavLink href="/my-courses" label={t("nav.myCourses")} />}
+            {user && <NavLink href="/dashboard" label={t("nav.dashboard")} />}
+            {isAdmin(profile?.role) && <NavLink href="/admin" label={t("nav.admin")} />}
+            {(isTeacher(profile?.role) || isAdmin(profile?.role)) && <NavLink href="/teacher" label={t("nav.teacher")} />}
           </nav>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -56,17 +56,17 @@ export const Navbar = () => {
           {user ? (
             <div className="flex items-center gap-2">
               <span className="hidden text-sm text-neutral-600 md:block">{profile?.displayName || user.email}</span>
-              <Button variant="ghost" size="sm" className="md:px-4 md:py-2 md:text-sm" onClick={async () => logout()} title="Logout">
+              <Button variant="ghost" size="sm" className="md:px-4 md:py-2 md:text-sm" onClick={async () => logout()} title={t("nav.logout")}>
                 <LogOut size={16} />
               </Button>
             </div>
           ) : (
             <>
               <Button variant="ghost" size="sm" className="md:px-4 md:py-2 md:text-sm" onClick={() => router.push("/login")}>
-                {t("login")}
+                {t("nav.login")}
               </Button>
               <Button size="sm" className="md:px-4 md:py-2 md:text-sm" onClick={() => router.push("/signup")}>
-                {t("signup")}
+                {t("nav.signup")}
               </Button>
             </>
           )}
@@ -75,11 +75,11 @@ export const Navbar = () => {
       {open && (
         <div className="border-b border-neutral-200 bg-white px-4 py-3 md:hidden">
           <div className="flex flex-col gap-3">
-            <NavLink href="/courses" label={t("browseCourses")} />
-            {user && <NavLink href="/my-courses" label={t("myCourses")} />}
-            {user && <NavLink href="/dashboard" label={t("dashboard")} />}
-            {isAdmin(profile?.role) && <NavLink href="/admin" label={t("admin")} />}
-            {(isTeacher(profile?.role) || isAdmin(profile?.role)) && <NavLink href="/teacher" label="Teacher" />}
+            <NavLink href="/courses" label={t("nav.courses")} />
+            {user && <NavLink href="/my-courses" label={t("nav.myCourses")} />}
+            {user && <NavLink href="/dashboard" label={t("nav.dashboard")} />}
+            {isAdmin(profile?.role) && <NavLink href="/admin" label={t("nav.admin")} />}
+            {(isTeacher(profile?.role) || isAdmin(profile?.role)) && <NavLink href="/teacher" label={t("nav.teacher")} />}
           </div>
         </div>
       )}

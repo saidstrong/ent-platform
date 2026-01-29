@@ -16,10 +16,10 @@ export default function Home() {
   const { user, profile, loading } = useAuth();
 
   const primaryCta = useMemo(() => {
-    if (!user) return { href: "/signup", label: t("signup") };
-    if (isAdmin(profile?.role)) return { href: "/admin", label: t("admin") };
-    if (isTeacher(profile?.role)) return { href: "/teacher", label: "Teacher" };
-    return { href: "/my-courses", label: t("myCourses") };
+    if (!user) return { href: "/signup", label: t("nav.signup") };
+    if (isAdmin(profile?.role)) return { href: "/admin", label: t("nav.admin") };
+    if (isTeacher(profile?.role)) return { href: "/teacher", label: t("nav.teacher") };
+    return { href: "/my-courses", label: t("nav.myCourses") };
   }, [user, profile?.role, t]);
 
   useEffect(() => {
@@ -32,12 +32,12 @@ export default function Home() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,#e0f2fe,transparent_35%),radial-gradient(circle_at_80%_0%,#dbeafe,transparent_30%)]" />
         <div className="relative grid gap-8 md:grid-cols-2 md:items-center">
           <div className="space-y-5">
-            <Badge>Welcome to</Badge>
-            <h1 className="text-4xl font-semibold leading-tight md:text-5xl">{t("landingTitle")}</h1>
-            <p className="max-w-2xl text-lg text-neutral-700">{t("landingSubtitle")}</p>
+            <Badge>{t("home.welcomeBadge")}</Badge>
+            <h1 className="text-4xl font-semibold leading-tight md:text-5xl">{t("home.heroTitle")}</h1>
+            <p className="max-w-2xl text-lg text-neutral-700">{t("home.heroSubtitle")}</p>
             <div className="flex flex-wrap gap-3">
               <Link href="/courses">
-                <Button>{t("browseCourses")}</Button>
+                <Button>{t("buttons.browseCourses")}</Button>
               </Link>
               {!loading && (
                 <Link href={primaryCta.href}>
@@ -48,12 +48,12 @@ export default function Home() {
           </div>
           <div className="relative">
             <div className="rounded-2xl border border-blue-100 bg-blue-50 p-6 shadow-inner">
-              <p className="text-sm font-semibold text-blue-800">Cohort MVP</p>
+              <p className="text-sm font-semibold text-blue-800">{t("home.cohortTitle")}</p>
               <ul className="mt-3 space-y-2 text-sm text-blue-900">
-                <li>• Manual Kaspi payment with admin confirmation</li>
-                <li>• Homework submissions with feedback</li>
-                <li>• Active enrollment gate for lesson content</li>
-                <li>• Bilingual UI (KZ/EN) toggle</li>
+                <li>• {t("home.cohortItems.manualPayment")}</li>
+                <li>• {t("home.cohortItems.homework")}</li>
+                <li>• {t("home.cohortItems.enrollmentGate")}</li>
+                <li>• {t("home.cohortItems.bilingual")}</li>
               </ul>
             </div>
           </div>
@@ -62,9 +62,9 @@ export default function Home() {
 
       <section className="mt-12 space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-semibold">Published courses</h2>
+          <h2 className="text-2xl font-semibold">{t("home.publishedTitle")}</h2>
           <Link href="/courses" className="text-sm font-semibold text-blue-700">
-            View all
+            {t("home.viewAll")}
           </Link>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
@@ -72,7 +72,9 @@ export default function Home() {
             <Card key={course.id} className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <Badge>{course.tags?.slice(0, 3).join(" • ") || "ENT"}</Badge>
-                <span className="text-sm text-neutral-500">{course.durationWeeks} weeks</span>
+                <span className="text-sm text-neutral-500">
+                  {course.durationWeeks} {t("home.weeksLabel")}
+                </span>
               </div>
               <h3 className="text-xl font-semibold">
                 {pickLang(course.title_kz, course.title_en, lang)} · {course.price} {course.currency}
@@ -82,25 +84,25 @@ export default function Home() {
               </p>
               <div className="flex items-center gap-2">
                 <Link href={`/courses/${course.id}`}>
-                  <Button size="sm">Details</Button>
+                  <Button size="sm">{t("home.details")}</Button>
                 </Link>
                 {user ? (
                   <Link href={`/my-courses`}>
                     <Button variant="secondary" size="sm">
-                      {t("myCourses")}
+                      {t("nav.myCourses")}
                     </Button>
                   </Link>
                 ) : (
                   <Link href={`/checkout/${course.id}`}>
                     <Button variant="secondary" size="sm">
-                      {t("buyAccess")}
+                      {t("buttons.getAccess")}
                     </Button>
                   </Link>
                 )}
               </div>
             </Card>
           ))}
-          {courses.length === 0 && <p className="text-sm text-neutral-600">No published courses yet. Add one in admin.</p>}
+          {courses.length === 0 && <p className="text-sm text-neutral-600">{t("home.noCourses")}</p>}
         </div>
       </section>
     </div>

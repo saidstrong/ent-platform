@@ -14,7 +14,7 @@ export default function CourseDetailPage() {
   const params = useParams<{ courseId: string }>();
   const router = useRouter();
   const { user, profile, loading } = useAuth();
-  const { lang } = useI18n();
+  const { lang, t } = useI18n();
   const [course, setCourse] = useState<Course | null>(null);
   const [modules, setModules] = useState<Module[]>([]);
   const [lessons, setLessons] = useState<Record<string, Lesson[]>>({});
@@ -88,7 +88,7 @@ export default function CourseDetailPage() {
     return orderedLessons[0]?.id;
   }, [modules, lessons, course]);
 
-  if (!course) return <p className="px-4 py-10 text-sm text-neutral-600">Loading course...</p>;
+  if (!course) return <p className="px-4 py-10 text-sm text-neutral-600">{t("errors.loadFailed")}</p>;
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-10">
@@ -99,27 +99,27 @@ export default function CourseDetailPage() {
             <h1 className="text-3xl font-semibold">{pickLang(course.title_kz, course.title_en, lang)}</h1>
             <p className="max-w-3xl text-sm text-neutral-600">{pickLang(course.description_kz, course.description_en, lang)}</p>
             <p className="text-sm text-neutral-600">
-              Level: {course.level} · Duration: {course.durationWeeks} weeks
+              {t("course.price")}: {course.price} {course.currency} · {course.durationWeeks} {t("course.durationWeeks")}
             </p>
           </div>
           <div className="rounded-xl bg-blue-50 p-4 text-right text-blue-900">
-            <p className="text-sm font-semibold">Price</p>
+            <p className="text-sm font-semibold">{t("course.price")}</p>
             <p className="text-3xl font-bold">
               {course.price} {course.currency}
             </p>
             {accessState === "enrolled" || hasRoleAccess ? (
               <Link href={firstLessonId ? `/learn/${course.id}/lesson/${firstLessonId}` : `/learn/${course.id}`}>
                 <Button className="mt-3" fullWidth>
-                  Continue learning
+                  {t("buttons.continueLearning")}
                 </Button>
               </Link>
             ) : accessState === "pending" ? (
               <Button className="mt-3" fullWidth disabled>
-                Under review
+                {t("course.pendingReview")}
               </Button>
             ) : accessState === "approved_waiting_enrollment" ? (
               <Button className="mt-3" fullWidth disabled>
-                Approved, updating access...
+                {t("course.approvedUpdating")}
               </Button>
             ) : (
               <Button
@@ -128,7 +128,7 @@ export default function CourseDetailPage() {
                 disabled={checkingAccess}
                 onClick={() => router.push(user ? `/checkout/${course.id}` : "/login")}
               >
-                {checkingAccess ? "Checking..." : "Buy course"}
+                {checkingAccess ? t("auth.loading") : t("buttons.buy")}
               </Button>
             )}
           </div>
@@ -136,13 +136,15 @@ export default function CourseDetailPage() {
       </div>
 
       <Card>
-        <h2 className="mb-3 text-xl font-semibold">Program</h2>
+        <h2 className="mb-3 text-xl font-semibold">{t("course.syllabus")}</h2>
         <div className="space-y-4">
           {modules.map((mod) => (
             <div key={mod.id} className="rounded-xl border border-neutral-100 bg-neutral-50 p-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold">{pickLang(mod.title_kz, mod.title_en, lang)}</h3>
-                <span className="text-xs uppercase text-neutral-500">Module {mod.order}</span>
+                <span className="text-xs uppercase text-neutral-500">
+                  {t("course.modules")} {mod.order}
+                </span>
               </div>
               <div className="mt-2 space-y-1">
                 {(lessons[mod.id] || []).map((lesson) => (
@@ -150,18 +152,18 @@ export default function CourseDetailPage() {
                     <span>{pickLang(lesson.title_kz, lesson.title_en, lang)}</span>
                     {accessState === "enrolled" || hasRoleAccess ? (
                       <Link className="text-blue-700" href={`/learn/${course.id}/lesson/${lesson.id}`}>
-                        Open
+                        {t("buttons.open")}
                       </Link>
                     ) : (
-                      <span className="text-xs text-neutral-500">Locked</span>
+                      <span className="text-xs text-neutral-500">{t("course.accessRequired")}</span>
                     )}
                   </div>
                 ))}
-                {(lessons[mod.id] || []).length === 0 && <p className="text-sm text-neutral-500">No lessons yet.</p>}
+                {(lessons[mod.id] || []).length === 0 && <p className="text-sm text-neutral-500">{t("course.noLessons")}</p>}
               </div>
             </div>
           ))}
-          {modules.length === 0 && <p className="text-sm text-neutral-600">Modules will appear once an admin creates them.</p>}
+          {modules.length === 0 && <p className="text-sm text-neutral-600">{t("course.noLessons")}</p>}
         </div>
       </Card>
     </div>

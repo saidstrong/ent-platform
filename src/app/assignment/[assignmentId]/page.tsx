@@ -18,7 +18,7 @@ import type { Assignment, Lesson, Submission } from "../../../lib/types";
 export default function AssignmentPage() {
   const params = useParams<{ assignmentId: string }>();
   const router = useRouter();
-  const { lang } = useI18n();
+  const { lang, t } = useI18n();
   const { user, loading } = useAuth();
   const isDev = process.env.NODE_ENV !== "production";
   const [assignment, setAssignment] = useState<Assignment | null>(null);
@@ -75,22 +75,22 @@ export default function AssignmentPage() {
     setSubmitting(true);
     try {
       if (submission && !allowResubmit) {
-        setError("You already submitted this assignment.");
+        setError(t("assignment.alreadySubmitted"));
         return;
       }
       if (file) {
         if (!allowedTypes.has(file.type)) {
-          setError("Unsupported file type. Please upload PDF, PNG, JPG/JPEG, or DOCX.");
+          setError(t("assignment.invalidFileType"));
           return;
         }
         if (file.size > maxFileSizeBytes) {
-          setError("File is too large. Max size is 20MB.");
+          setError(t("assignment.fileTooLarge"));
           return;
         }
       }
       const courseId = assignment.courseId || lesson?.courseId;
       if (!courseId || !assignment.lessonId) {
-        setError("Missing course or lesson info. Please refresh and try again.");
+        setError(t("assignment.missingCourseLesson"));
         return;
       }
       const submissionId = submission?.id
@@ -110,10 +110,10 @@ export default function AssignmentPage() {
       router.push("/dashboard");
     } catch (err: unknown) {
       if (isDev) console.error("[upload] failure", err);
-      const message = err instanceof Error ? err.message : "Failed to submit assignment";
+      const message = err instanceof Error ? err.message : t("assignment.submitError");
       const code = typeof err === "object" && err !== null && "code" in err ? String((err as { code?: string }).code) : "";
       if (message.toLowerCase().includes("permission") || code === "storage/unauthorized") {
-        setError("Upload failed due to insufficient permissions. Please try again or contact support.");
+        setError(t("assignment.uploadDenied"));
       } else {
         setError(message);
       }
@@ -126,9 +126,9 @@ export default function AssignmentPage() {
     <RequireAuth>
       <div className="mx-auto max-w-3xl px-4 py-10">
         <Link href="/dashboard" className="text-sm text-blue-700">
-          ← Back
+          ← {t("buttons.backToCourse")}
         </Link>
-        <h1 className="mt-2 text-3xl font-semibold">{assignment ? pickLang(assignment.title_kz, assignment.title_en, lang) : "Assignment"}</h1>
+        <h1 className="mt-2 text-3xl font-semibold">{assignment ? pickLang(assignment.title_kz, assignment.title_en, lang) : t("assignment.title")}</h1>
         {lesson && <p className="text-sm text-neutral-600">{pickLang(lesson.title_kz, lesson.title_en, lang)}</p>}
         <Card className="mt-4">
           <form className="space-y-4" onSubmit={submit}>
@@ -136,37 +136,45 @@ export default function AssignmentPage() {
             {submission && (
               <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold uppercase text-neutral-500">Your submission</p>
+                  <p className="text-xs font-semibold uppercase text-neutral-500">{t("lesson.yourSubmission")}</p>
                   <span
                     className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
                       submission.checkedAt ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-800"
                     }`}
                   >
-                    {submission.checkedAt ? "Checked" : "Pending review"}
+                    {submission.checkedAt ? t("lesson.statusChecked") : t("lesson.statusPending")}
                   </span>
                 </div>
                 <div className="mt-2 space-y-1 text-neutral-700">
-                  <p>Submitted: {formatAnyTimestamp(submission.submittedAt)}</p>
+                  <p>
+                    {t("lesson.submittedAt")}: {formatAnyTimestamp(submission.submittedAt)}
+                  </p>
                   {submission.grade !== null && submission.grade !== undefined && (
-                    <p className="text-base font-semibold">Grade: {submission.grade}</p>
+                    <p className="text-base font-semibold">
+                      {t("lesson.grade")}: {submission.grade}
+                    </p>
                   )}
                   {submission.feedback && (
                     <div className="rounded-md bg-white p-2 text-sm">
-                      <p className="text-[12px] font-semibold uppercase text-neutral-500">Feedback</p>
+                      <p className="text-[12px] font-semibold uppercase text-neutral-500">{t("lesson.feedback")}</p>
                       <p>{submission.feedback}</p>
                     </div>
                   )}
-                  {submission.checkedAt && <p className="text-xs text-neutral-500">Checked at: {formatAnyTimestamp(submission.checkedAt)}</p>}
+                  {submission.checkedAt && (
+                    <p className="text-xs text-neutral-500">
+                      {t("lesson.checkedAt")}: {formatAnyTimestamp(submission.checkedAt)}
+                    </p>
+                  )}
                   {submission.fileUrl && (
                     <div className="space-y-1">
-                      <p className="text-[12px] font-semibold uppercase text-neutral-500">Attachment</p>
+                      <p className="text-[12px] font-semibold uppercase text-neutral-500">{t("assignment.attachFile")}</p>
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-xs text-neutral-600">{submission.fileName || filenameFromUrl(submission.fileUrl)}</span>
                         <a className="text-blue-700" href={submission.fileUrl} target="_blank" rel="noreferrer">
-                          Open
+                          {t("assignment.openAttachment")}
                         </a>
                         <a className="text-blue-700" href={submission.fileUrl} target="_blank" rel="noreferrer" download>
-                          Download
+                          {t("assignment.downloadAttachment")}
                         </a>
                       </div>
                       {((submission.contentType && submission.contentType.startsWith("image/")) ||
@@ -174,13 +182,12 @@ export default function AssignmentPage() {
                         submission.fileUrl.endsWith(".jpeg") ||
                         submission.fileUrl.endsWith(".png") ||
                         submission.fileUrl.endsWith(".webp")) && (
-                        // lightweight preview; intentionally not using next/image to avoid layout shifts here
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={submission.fileUrl} alt="Submission attachment" className="max-h-40 rounded-md object-contain" />
                       )}
                       {(submission.contentType === "application/pdf" || submission.fileUrl.endsWith(".pdf")) && (
                         <a className="text-blue-700" href={submission.fileUrl} target="_blank" rel="noreferrer">
-                          Open PDF
+                          {t("assignment.openAttachment")}
                         </a>
                       )}
                     </div>
@@ -188,20 +195,20 @@ export default function AssignmentPage() {
                 </div>
                 {!allowResubmit && (
                   <div className="mt-3 flex items-center justify-between rounded-md bg-white px-3 py-2 text-xs text-neutral-600">
-                    <span>Want to submit again?</span>
+                    <span>{t("assignment.allowResubmit")}</span>
                     <Button size="sm" variant="secondary" onClick={() => setAllowResubmit(true)}>
-                      Resubmit
+                      {t("buttons.resubmit")}
                     </Button>
                   </div>
                 )}
               </div>
             )}
             <div>
-              <label className="text-sm font-semibold text-neutral-700">Text answer</label>
-              <Textarea rows={5} value={textAnswer} onChange={(e) => setTextAnswer(e.target.value)} placeholder="Your solution..." />
+              <label className="text-sm font-semibold text-neutral-700">{t("assignment.textAnswer")}</label>
+              <Textarea rows={5} value={textAnswer} onChange={(e) => setTextAnswer(e.target.value)} placeholder={t("assignment.textAnswerPlaceholder")} />
             </div>
             <div>
-              <label className="text-sm font-semibold text-neutral-700">Attach file (optional)</label>
+              <label className="text-sm font-semibold text-neutral-700">{t("assignment.attachFile")}</label>
               <Input
                 type="file"
                 accept="application/pdf,image/*,.docx"
@@ -213,7 +220,7 @@ export default function AssignmentPage() {
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
             <Button type="submit" disabled={submitting || (!!submission && !allowResubmit)}>
-              {submitting ? "Submitting..." : "Submit homework"}
+              {submitting ? t("assignment.submitting") : t("assignment.submitHomework")}
             </Button>
           </form>
         </Card>
