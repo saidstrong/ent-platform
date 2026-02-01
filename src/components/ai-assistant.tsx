@@ -13,11 +13,14 @@ type AssistantMessage = {
   text: string;
   sources?: string[];
   citations?: string[];
+  citationMeta?: Array<{ resourceId: string; name: string; excerpts?: number[] }>;
   mode?: string;
   policyApplied?: {
     allowDirectAnswers?: boolean;
     allowFullSolutions?: boolean;
     style?: string;
+    citationRequired?: boolean;
+    maxAnswerLength?: number;
   };
 };
 type ThreadItem = { id: string; title: string; updatedAt?: string };
@@ -27,12 +30,15 @@ type ThreadMessage = {
   content: string;
   sources?: string[];
   citations?: string[];
+  citationMeta?: Array<{ resourceId: string; name: string; excerpts?: number[] }>;
   mode?: string;
   createdAt?: any;
   policyApplied?: {
     allowDirectAnswers?: boolean;
     allowFullSolutions?: boolean;
     style?: string;
+    citationRequired?: boolean;
+    maxAnswerLength?: number;
   };
 };
 
@@ -92,12 +98,14 @@ export const AssistantPanel = () => {
   const [newThreadNext, setNewThreadNext] = useState(false);
   const [threadBusy, setThreadBusy] = useState(false);
   const [citationPreview, setCitationPreview] = useState<CitationPreview | null>(null);
+  const [expandedCitations, setExpandedCitations] = useState<Record<string, boolean>>({});
   const [policyInfo, setPolicyInfo] = useState<{ mode?: string; policyApplied?: ThreadMessage["policyApplied"] } | null>(
     null,
   );
   const threadsLoadingRef = useRef(false);
   const threadLoadingRef = useRef(false);
   const sendingRef = useRef(false);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const canAsk = !!user && !loading;
 
@@ -175,6 +183,18 @@ export const AssistantPanel = () => {
     [user, fetchWithAuth, t],
   );
 
+  const upsertThreadMessage = useCallback((nextMessage: ThreadMessage) => {
+    setThreadMessages((prev) => {
+      const index = prev.findIndex((msg) => msg.id === nextMessage.id);
+      if (index >= 0) {
+        const copy = [...prev];
+        copy[index] = { ...copy[index], ...nextMessage };
+        return copy;
+      }
+      return [...prev, nextMessage];
+    });
+  }, []);
+
   useEffect(() => {
     if (!open || !user) return;
     loadThreads().catch(() => null);
@@ -201,10 +221,7 @@ export const AssistantPanel = () => {
     const clientRequestId = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}_${Math.random().toString(36).slice(2)}`;
     setInput("");
     if (activeThreadId) {
-      setThreadMessages((prev) => [
-        ...prev,
-        { id: `local-${clientRequestId}`, role: "user", content: question },
-      ]);
+      upsertThreadMessage({ id: `u_${clientRequestId}`, role: "user", content: question });
     } else {
       setMessages((prev) => [...prev, { role: "user", text: question }]);
     }
@@ -236,18 +253,16 @@ export const AssistantPanel = () => {
         throw new Error(payload?.error || t("ai.genericError"));
       }
       if (activeThreadId) {
-        setThreadMessages((prev) => [
-          ...prev,
-          {
-            id: `local-${clientRequestId}-assistant`,
-            role: "assistant",
-            content: payload.replyText,
-            sources: payload.sources,
-            citations: payload.citations,
-            mode: payload.mode,
-            policyApplied: payload.policyApplied,
-          },
-        ]);
+        upsertThreadMessage({
+          id: `a_${clientRequestId}`,
+          role: "assistant",
+          content: payload.replyText,
+          sources: payload.sources,
+          citations: payload.citations,
+          citationMeta: payload.citationMeta,
+          mode: payload.mode,
+          policyApplied: payload.policyApplied,
+        });
       } else {
         setMessages((prev) => [
           ...prev,
@@ -256,6 +271,7 @@ export const AssistantPanel = () => {
             text: payload.replyText,
             sources: payload.sources,
             citations: payload.citations,
+            citationMeta: payload.citationMeta,
             mode: payload.mode,
             policyApplied: payload.policyApplied,
           },
@@ -334,9 +350,35 @@ export const AssistantPanel = () => {
       .map((entry) => entry.msg);
   }, [threadMessages]);
 
-  const renderMeta = (sources?: string[], citations?: string[], messageKey?: string) => {
+  const dedupedThreadMessages = useMemo(() => {
+    const seen = new Set<string>();
+    return sortedThreadMessages.filter((msg) => {
+      const key = msg.id || `${msg.role}:${msg.content}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [sortedThreadMessages]);
+
+  useEffect(() => {
+    if (!open) return;
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [open, dedupedThreadMessages.length, messages.length, sending]);
+
+  const renderMeta = (
+    sources?: string[],
+    citations?: string[],
+    messageKey?: string,
+    answerText?: string,
+    citationMeta?: ThreadMessage["citationMeta"],
+  ) => {
     if ((!sources || sources.length === 0) && (!citations || citations.length === 0)) return null;
     const nameByResource = new Map<string, string>();
+    (citationMeta || []).forEach((meta) => {
+      if (meta?.resourceId && meta?.name) {
+        nameByResource.set(meta.resourceId, meta.name);
+      }
+    });
     const inferredSources: string[] = [];
     (sources || []).forEach((source) => {
       if (!source) return;
@@ -349,7 +391,9 @@ export const AssistantPanel = () => {
       const ids = idsPart.split(",").map((id) => id.trim()).filter(Boolean);
       ids.forEach((id) => {
         const [resourceId] = id.split("#");
-        if (resourceId) nameByResource.set(resourceId, namePart.trim());
+        if (resourceId && !nameByResource.has(resourceId)) {
+          nameByResource.set(resourceId, namePart.trim());
+        }
       });
     });
     const grouped = new Map<string, { name: string; excerpts: string[] }>();
@@ -360,8 +404,10 @@ export const AssistantPanel = () => {
         name: nameByResource.get(resourceId) || resourceId,
         excerpts: [],
       };
-      if (chunkRaw && !entry.excerpts.includes(chunkRaw)) {
-        entry.excerpts.push(chunkRaw);
+      const numeric = Number(chunkRaw);
+      const display = Number.isFinite(numeric) ? String(numeric + 1) : chunkRaw;
+      if (display && !entry.excerpts.includes(display)) {
+        entry.excerpts.push(display);
       }
       grouped.set(resourceId, entry);
     });
@@ -374,50 +420,76 @@ export const AssistantPanel = () => {
       const label = excerpts.length > 0 ? `${entry.name} excerpts: ${excerpts.join(", ")}` : entry.name;
       return label;
     });
+    if (groupedLabels.length === 0 && citationMeta?.length) {
+      citationMeta.forEach((meta) => {
+        const excerpts = (meta.excerpts || []).map((value) => String(value));
+        const label = excerpts.length > 0 ? `${meta.name} excerpts: ${excerpts.join(", ")}` : meta.name;
+        groupedLabels.push(label);
+      });
+    }
     const summaryParts = [...new Set([...inferredSources, ...groupedLabels])];
 
     const formatCitationLabel = (id: string) => {
       const [resourceId, chunkRaw] = id.split("#");
-      const sourceMatch = sources?.find((entry) => entry.includes(resourceId)) || "";
-      const name = sourceMatch ? sourceMatch.split("(")[0].trim() : resourceId;
-      return `${name} — excerpt ${chunkRaw ?? ""}`.trim();
+      const name = nameByResource.get(resourceId) || resourceId;
+      const numeric = Number(chunkRaw);
+      const display = Number.isFinite(numeric) ? numeric + 1 : chunkRaw ?? "";
+      return `${name} — excerpt ${display}`.trim();
     };
+    const showCitations = messageKey ? !!expandedCitations[messageKey] : false;
     return (
       <div className="mt-2 space-y-1 text-[11px] text-neutral-500">
         {summaryParts.length ? (
-          <div>
-            <span className="font-semibold">{t("ai.sources")}:</span> {summaryParts.join("; ")}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold">{t("ai.sources")}:</span>
+            <span>{summaryParts.join("; ")}</span>
+            {answerText ? (
+              <button
+                type="button"
+                className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-blue-600 hover:text-blue-700"
+                onClick={() => {
+                  if (typeof navigator === "undefined" || !navigator.clipboard) return;
+                  navigator.clipboard.writeText(answerText).catch(() => null);
+                }}
+              >
+                {t("ai.copyAnswer")}
+              </button>
+            ) : null}
           </div>
         ) : null}
         {citations?.length ? (
-          <div className="flex flex-wrap items-center gap-1">
-            <span className="font-semibold">{t("ai.citations")}:</span>
-            {citations.map((id) => (
-              <span
-                key={id}
-                role="button"
-                tabIndex={0}
-                onClick={() => openCitation(id, messageKey)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    openCitation(id, messageKey);
-                  }
-                }}
-                className="rounded bg-neutral-200 px-1.5 py-0.5 font-mono text-[10px] text-neutral-700 hover:bg-neutral-300"
-              >
-                {formatCitationLabel(id)}
-              </span>
-            ))}
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              className="ml-1 rounded px-1.5 py-0.5 text-[10px] font-semibold text-blue-600 hover:text-blue-700"
+              className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-blue-600 hover:text-blue-700"
               onClick={() => {
-                if (typeof navigator === "undefined" || !navigator.clipboard) return;
-                navigator.clipboard.writeText(citations.join(", ")).catch(() => null);
+                if (!messageKey) return;
+                setExpandedCitations((prev) => ({ ...prev, [messageKey]: !prev[messageKey] }));
               }}
             >
-              {t("ai.copyCitations")}
+              {showCitations ? t("ai.hideCitations") : t("ai.showCitations")}
             </button>
+            {showCitations && (
+              <div className="flex flex-wrap items-center gap-1">
+                <span className="font-semibold">{t("ai.citations")}:</span>
+                {citations.map((id) => (
+                  <span
+                    key={id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openCitation(id, messageKey)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        openCitation(id, messageKey);
+                      }
+                    }}
+                    className="rounded bg-neutral-200 px-1.5 py-0.5 font-mono text-[10px] text-neutral-700 hover:bg-neutral-300"
+                  >
+                    {formatCitationLabel(id)}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         ) : null}
       </div>
@@ -557,7 +629,7 @@ export const AssistantPanel = () => {
         {(threadMessages.length === 0 && messages.length === 0) && (
           <p className="text-sm text-neutral-600">{t("ai.empty")}</p>
         )}
-        {sortedThreadMessages.map((msg) => {
+        {dedupedThreadMessages.map((msg) => {
           const messageKey = msg.id;
           const showPreview =
             citationPreview &&
@@ -571,7 +643,7 @@ export const AssistantPanel = () => {
             }`}
           >
             <p>{msg.content}</p>
-            {msg.role === "assistant" && renderMeta(msg.sources, msg.citations, messageKey)}
+            {msg.role === "assistant" && renderMeta(msg.sources, msg.citations, messageKey, msg.content, msg.citationMeta)}
             {msg.role === "assistant" && showPreview && (
               <div className="mt-2 hidden rounded-lg border border-neutral-200 bg-white p-2 text-[11px] text-neutral-700 sm:block">
                 <div className="mb-1 flex items-center justify-between text-[10px] uppercase text-neutral-500">
@@ -597,7 +669,8 @@ export const AssistantPanel = () => {
             }`}
           >
             <p>{msg.text}</p>
-            {msg.role === "assistant" && renderMeta(msg.sources, msg.citations, `local-${idx}`)}
+            {msg.role === "assistant" &&
+              renderMeta(msg.sources, msg.citations, `local-${idx}`, msg.text, msg.citationMeta)}
             {msg.role === "assistant" &&
               citationPreview &&
               citationPreview.messageKey === `local-${idx}` &&
@@ -617,6 +690,7 @@ export const AssistantPanel = () => {
               )}
           </div>
         ))}
+        <div ref={bottomRef} />
       </div>
       {citationPreview && (
         <>

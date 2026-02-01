@@ -61,7 +61,11 @@ export default function TeacherAiAnalyticsPage() {
       });
       const payload = await res.json().catch(() => null);
       if (!res.ok || payload?.ok === false) {
-        setError(t("aiAnalytics.loadFailed"));
+        if (payload?.code === "firestore_missing_index") {
+          setError(t("aiAnalytics.indexBuilding"));
+        } else {
+          setError(t("aiAnalytics.loadFailed"));
+        }
       } else {
         setData(payload as AnalyticsResponse);
       }

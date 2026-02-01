@@ -263,6 +263,91 @@ const getDateString = (date: Date) => {
 const getAnalyticsDocId = (courseId: string, lessonId: string | null, date: string) =>
   `aiad_${courseId}_${lessonId || "all"}_${date}`;
 
+const buildAnalyticsPayload = (
+  data: any,
+  params: {
+    courseId: string;
+    lessonId: string | null;
+    date: string;
+    mode: string;
+    outcome: string;
+    qHash: string;
+    exampleTruncated: string;
+    now: Date;
+  },
+) => {
+  const totalRequests = Number(data?.totalRequests || 0) + 1;
+  const byMode = { ...(data?.byMode || {}) } as Record<string, number>;
+  byMode[params.mode] = Number(byMode[params.mode] || 0) + 1;
+  const byOutcome = { ...(data?.byOutcome || {}) } as Record<string, number>;
+  byOutcome[params.outcome] = Number(byOutcome[params.outcome] || 0) + 1;
+  const current = Array.isArray(data?.topQuestions) ? data.topQuestions : [];
+  const updated = [...current];
+  const existingIndex = updated.findIndex((q) => q?.qHash === params.qHash);
+  const nowTs = admin.firestore.Timestamp.fromDate(params.now);
+  if (existingIndex >= 0) {
+    updated[existingIndex] = {
+      ...updated[existingIndex],
+      count: Number(updated[existingIndex].count || 0) + 1,
+      lastSeenAt: nowTs,
+    };
+  } else {
+    updated.push({
+      qHash: params.qHash,
+      exampleTruncated: params.exampleTruncated,
+      count: 1,
+      lastSeenAt: nowTs,
+    });
+  }
+  updated.sort((a, b) => {
+    const diff = Number(b.count || 0) - Number(a.count || 0);
+    if (diff !== 0) return diff;
+    const aTime = a.lastSeenAt?.toMillis ? a.lastSeenAt.toMillis() : 0;
+    const bTime = b.lastSeenAt?.toMillis ? b.lastSeenAt.toMillis() : 0;
+    return bTime - aTime;
+  });
+  return {
+    courseId: params.courseId,
+    lessonId: params.lessonId,
+    date: params.date,
+    totalRequests,
+    byMode,
+    byOutcome,
+    topQuestions: updated.slice(0, 20),
+    updatedAt: nowTs,
+  };
+};
+
+const writeAnalytics = async (
+  db: FirebaseFirestore.Firestore,
+  params: {
+    courseId: string;
+    lessonId: string | null;
+    date: string;
+    mode: string;
+    outcome: string;
+    qHash: string;
+    exampleTruncated: string;
+    now: Date;
+  },
+) => {
+  const lessonId = params.lessonId ? String(params.lessonId) : null;
+  const courseRef = db.collection("aiAnalyticsDaily").doc(getAnalyticsDocId(params.courseId, null, params.date));
+  const lessonRef = lessonId
+    ? db.collection("aiAnalyticsDaily").doc(getAnalyticsDocId(params.courseId, lessonId, params.date))
+    : null;
+  const [courseSnap, lessonSnap] = await Promise.all([
+    courseRef.get(),
+    lessonRef ? lessonRef.get() : Promise.resolve(null),
+  ]);
+  const writes: Array<Promise<FirebaseFirestore.WriteResult>> = [];
+  if (lessonRef && lessonSnap) {
+    writes.push(lessonRef.set(buildAnalyticsPayload(lessonSnap.data(), { ...params, lessonId }), { merge: true }));
+  }
+  writes.push(courseRef.set(buildAnalyticsPayload(courseSnap.data(), { ...params, lessonId: null }), { merge: true }));
+  await Promise.all(writes);
+};
+
 const isPdfResource = (resource: {
   name?: string;
   contentType?: string;
@@ -566,6 +651,18 @@ export async function POST(req: NextRequest) {
         policyFromLesson?.style ||
         policyFromCourse?.style ||
         defaultPolicy.style,
+      citationRequired:
+        typeof policyFromLesson?.citationRequired === "boolean"
+          ? policyFromLesson.citationRequired
+          : typeof policyFromCourse?.citationRequired === "boolean"
+            ? policyFromCourse.citationRequired
+            : true,
+      maxAnswerLength:
+        typeof policyFromLesson?.maxAnswerLength === "number"
+          ? policyFromLesson.maxAnswerLength
+          : typeof policyFromCourse?.maxAnswerLength === "number"
+            ? policyFromCourse.maxAnswerLength
+            : 0,
     };
     const restrictedMode = mode === "quiz" || mode === "assignment";
     const cheatingIntent = detectCheatingIntent(message);
@@ -612,7 +709,8 @@ export async function POST(req: NextRequest) {
     const selectedChunkIds = new Set<string>();
     const selectedChunkLabels: string[] = [];
     const selectedChunkTexts: string[] = [];
-    const chunkIdsByResource = new Map<string, { name: string; ids: string[] }>();
+    const citationMeta: Array<{ resourceId: string; name: string; excerpts: number[] }> = [];
+    const excerptNumbersByResource = new Map<string, { name: string; numbers: number[] }>();
 
     for (const resource of pdfResources.slice(0, MAX_PDFS)) {
       if (pdfCharsUsed >= MAX_PDF_CHARS_TOTAL) break;
@@ -729,27 +827,29 @@ export async function POST(req: NextRequest) {
               selectedChunkIds.add(chunkId);
               selectedChunkLabels.push(chunkLabel);
               selectedChunkTexts.push(excerpt);
-              const existing = chunkIdsByResource.get(resourceId) || { name, ids: [] };
-              existing.ids.push(chunkId);
-              chunkIdsByResource.set(resourceId, existing);
+              const excerptEntry = excerptNumbersByResource.get(resourceId) || { name, numbers: [] };
+              excerptEntry.numbers.push(item.index + 1);
+              excerptNumbersByResource.set(resourceId, excerptEntry);
             }
             if (pickedIndices.length > 0) {
-              const entry = chunkIdsByResource.get(resourceId);
+              const entry = excerptNumbersByResource.get(resourceId);
               if (entry) {
-                pdfSources.push(`${entry.name} (${entry.ids.join(", ")})`);
+                const unique = Array.from(new Set(entry.numbers)).sort((a, b) => a - b);
+                citationMeta.push({ resourceId, name: entry.name, excerpts: unique });
+                pdfSources.push(`${entry.name} excerpts: ${unique.join(", ")}`);
               }
             }
         } catch (err) {
           log("warn", stage, { code: "pdf_rank_failed", message: String(err) });
           const remaining = Math.max(MAX_PDF_CHARS_TOTAL - pdfCharsUsed, 0);
           const excerpt = truncateText(cachedText, Math.min(MAX_PDF_CHARS_PER, remaining));
-          if (excerpt) {
-            stage = "pdf:attach";
-            log("info", stage, { resourceId });
-            pdfContextParts.push(`PDF: ${name}\n${excerpt}`);
-            pdfSources.push(`${name} (pdf)`);
-            pdfCharsUsed += excerpt.length;
-          }
+            if (excerpt) {
+              stage = "pdf:attach";
+              log("info", stage, { resourceId });
+              pdfContextParts.push(`PDF: ${name}\n${excerpt}`);
+              pdfSources.push(`${name} pdf`);
+              pdfCharsUsed += excerpt.length;
+            }
         }
       }
     }
@@ -760,6 +860,7 @@ export async function POST(req: NextRequest) {
     const combinedContextText = [contextText, ...pdfContextParts].filter(Boolean).join("\n\n").trim();
     const combinedSources = [...sources, ...pdfSources];
     const hasPdfContext = pdfContextParts.length > 0;
+    const pdfUnreadable = pdfFoundCount > 0 && !hasPdfContext;
 
     const threadsRef = db.collection("aiThreads");
     let activeThreadId = typeof threadId === "string" && threadId.trim().length > 0 ? threadId.trim() : "";
@@ -830,6 +931,7 @@ export async function POST(req: NextRequest) {
             },
             sources: data.sources || [],
             citations: data.citations || [],
+            citationMeta: data.citationMeta || [],
             threadId: activeThreadId,
             mode: data.mode,
             policyApplied: data.policyApplied,
@@ -863,7 +965,6 @@ export async function POST(req: NextRequest) {
 
     if (!hasLessonContext && !hasPdfContext) {
       stage = "context:missing";
-      const pdfUnreadable = pdfFoundCount > 0 && !hasPdfContext;
       log("info", stage, { pdfFoundCount, pdfResolvedCount, pdfUnreadable });
       const replyText = lang == "kz"
         ? (pdfUnreadable ? pdfUnreadableByLang.kz : fallbackByLang.kz)
@@ -920,6 +1021,7 @@ export async function POST(req: NextRequest) {
             uid,
             sources: [pdfUnreadable ? "PDF unreadable" : "No lesson context available"],
             citations: [],
+            citationMeta: [],
             mode,
             policyApplied,
           });
@@ -941,70 +1043,15 @@ export async function POST(req: NextRequest) {
       try {
         stage = "analytics:write";
         log("info", stage, { outcome });
-        const date = getDateString(now);
-      const docLessonId = lessonId ? String(lessonId) : null;
-      const docCourseId = courseId ? String(courseId) : "unknown";
-          const lessonDocId = getAnalyticsDocId(docCourseId, docLessonId, date);
-          const courseDocId = getAnalyticsDocId(docCourseId, null, date);
-        const lessonRef = db.collection("aiAnalyticsDaily").doc(lessonDocId);
-        const courseRef = db.collection("aiAnalyticsDaily").doc(courseDocId);
-        const updateDoc = async (
-          tx: FirebaseFirestore.Transaction,
-          ref: FirebaseFirestore.DocumentReference,
-          lessonValue: string | null,
-        ) => {
-          const snap = await tx.get(ref);
-          const data = snap.data() || {};
-          const totalRequests = Number(data.totalRequests || 0) + 1;
-          const byMode = { ...(data.byMode || {}) } as Record<string, number>;
-          byMode[mode] = Number(byMode[mode] || 0) + 1;
-          const byOutcome = { ...(data.byOutcome || {}) } as Record<string, number>;
-          byOutcome[outcome] = Number(byOutcome[outcome] || 0) + 1;
-          const current = Array.isArray(data.topQuestions) ? data.topQuestions : [];
-          const updated = [...current];
-          const existingIndex = updated.findIndex((q) => q?.qHash === qHash);
-          const nowTs = admin.firestore.Timestamp.fromDate(now);
-          if (existingIndex >= 0) {
-            updated[existingIndex] = {
-              ...updated[existingIndex],
-              count: Number(updated[existingIndex].count || 0) + 1,
-              lastSeenAt: nowTs,
-            };
-          } else {
-            updated.push({
-              qHash,
-              exampleTruncated,
-              count: 1,
-              lastSeenAt: nowTs,
-            });
-          }
-          updated.sort((a, b) => {
-            const diff = Number(b.count || 0) - Number(a.count || 0);
-            if (diff !== 0) return diff;
-            const aTime = a.lastSeenAt?.toMillis ? a.lastSeenAt.toMillis() : 0;
-            const bTime = b.lastSeenAt?.toMillis ? b.lastSeenAt.toMillis() : 0;
-            return bTime - aTime;
-          });
-          tx.set(
-            ref,
-            {
-              courseId: docCourseId,
-              lessonId: lessonValue,
-              date,
-              totalRequests,
-              byMode,
-              byOutcome,
-              topQuestions: updated.slice(0, 20),
-              updatedAt: nowTs,
-            },
-            { merge: true },
-          );
-        };
-        await db.runTransaction(async (tx) => {
-          if (docLessonId) {
-            await updateDoc(tx, lessonRef, docLessonId);
-          }
-          await updateDoc(tx, courseRef, null);
+        await writeAnalytics(db, {
+          courseId: courseId ? String(courseId) : "unknown",
+          lessonId: lessonId ? String(lessonId) : null,
+          date: getDateString(now),
+          mode,
+          outcome,
+          qHash,
+          exampleTruncated,
+          now,
         });
       } catch (err) {
         log("warn", stage, { code: "analytics_write_failed", message: String(err) });
@@ -1014,6 +1061,9 @@ export async function POST(req: NextRequest) {
         threadId: activeThreadId,
         usage,
         sources: [pdfUnreadable ? "PDF unreadable" : "No lesson context available"],
+        citations: [],
+        citationMeta: [],
+        pdfUnreadable,
         mode,
         policyApplied,
         remaining: {
@@ -1144,9 +1194,15 @@ export async function POST(req: NextRequest) {
     const hintTemplate = hintTemplates[lang as "en" | "kz" | "ru"] || hintTemplates.en;
     const hintResponse = `${hintTemplate.noDirect}\n${hintTemplate.related}\n${hintTemplate.question}`;
 
-    const invalidCitations =
-      citations.length === 0 ||
-      citations.some((id) => !selectedChunkIds.has(id));
+    const citationRequired = policyApplied.citationRequired !== false && selectedChunkIds.size > 0;
+    const citationsInvalid = citations.some((id) => !selectedChunkIds.has(id));
+    const hadInvalidCitations = citationsInvalid;
+    if (citationsInvalid) {
+      log("warn", stage, { code: "openai_invalid_citations", citationsInvalid });
+      citations = citations.filter((id) => selectedChunkIds.has(id));
+    }
+    const citationsMissing = citations.length === 0;
+    const citationIssue = citationRequired && citationsMissing && !hadInvalidCitations;
     const languageMismatch =
       (lang === "en" && isMostlyCyrillic(replyText)) ||
       ((lang === "kz" || lang === "ru") && isMostlyLatin(replyText));
@@ -1162,10 +1218,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (!forceHint && (invalidCitations || needsMoreContext || languageMismatch)) {
+    if (!forceHint && (citationIssue || needsMoreContext || languageMismatch)) {
       log("warn", stage, {
-        code: invalidCitations ? "openai_invalid_citations" : "openai_language_mismatch",
-        invalidCitations,
+        code: citationIssue ? "openai_invalid_citations" : "openai_language_mismatch",
+        invalidCitations: citationIssue,
         needsMoreContext,
         languageMismatch,
       });
@@ -1178,7 +1234,7 @@ export async function POST(req: NextRequest) {
 
     const outcome = forceHint
       ? "policy_refusal"
-      : (invalidCitations || languageMismatch)
+      : (citationIssue || languageMismatch || hadInvalidCitations)
         ? "error_recovered"
         : needsMoreContext
           ? "unsupported"
@@ -1241,6 +1297,7 @@ export async function POST(req: NextRequest) {
           uid,
           sources: combinedSources,
           citations,
+          citationMeta,
           mode,
           policyApplied,
         });
@@ -1262,70 +1319,15 @@ export async function POST(req: NextRequest) {
     try {
       stage = "analytics:write";
       log("info", stage, { outcome });
-      const date = getDateString(now);
-      const docLessonId = lessonId ? String(lessonId) : null;
-      const docCourseId = courseId ? String(courseId) : "unknown";
-      const lessonDocId = getAnalyticsDocId(docCourseId, docLessonId, date);
-      const courseDocId = getAnalyticsDocId(docCourseId, null, date);
-      const lessonRef = db.collection("aiAnalyticsDaily").doc(lessonDocId);
-      const courseRef = db.collection("aiAnalyticsDaily").doc(courseDocId);
-      const updateDoc = async (
-        tx: FirebaseFirestore.Transaction,
-        ref: FirebaseFirestore.DocumentReference,
-        lessonValue: string | null,
-      ) => {
-        const snap = await tx.get(ref);
-        const data = snap.data() || {};
-        const totalRequests = Number(data.totalRequests || 0) + 1;
-        const byMode = { ...(data.byMode || {}) } as Record<string, number>;
-        byMode[mode] = Number(byMode[mode] || 0) + 1;
-        const byOutcome = { ...(data.byOutcome || {}) } as Record<string, number>;
-        byOutcome[outcome] = Number(byOutcome[outcome] || 0) + 1;
-        const current = Array.isArray(data.topQuestions) ? data.topQuestions : [];
-        const updated = [...current];
-        const existingIndex = updated.findIndex((q) => q?.qHash === qHash);
-        const nowTs = admin.firestore.Timestamp.fromDate(now);
-        if (existingIndex >= 0) {
-          updated[existingIndex] = {
-            ...updated[existingIndex],
-            count: Number(updated[existingIndex].count || 0) + 1,
-            lastSeenAt: nowTs,
-          };
-        } else {
-          updated.push({
-            qHash,
-            exampleTruncated,
-            count: 1,
-            lastSeenAt: nowTs,
-          });
-        }
-        updated.sort((a, b) => {
-          const diff = Number(b.count || 0) - Number(a.count || 0);
-          if (diff !== 0) return diff;
-          const aTime = a.lastSeenAt?.toMillis ? a.lastSeenAt.toMillis() : 0;
-          const bTime = b.lastSeenAt?.toMillis ? b.lastSeenAt.toMillis() : 0;
-          return bTime - aTime;
-        });
-        tx.set(
-          ref,
-          {
-            courseId: docCourseId,
-            lessonId: lessonValue,
-            date,
-            totalRequests,
-            byMode,
-            byOutcome,
-            topQuestions: updated.slice(0, 20),
-            updatedAt: nowTs,
-          },
-          { merge: true },
-        );
-      };
-      await db.runTransaction(async (tx) => {
-        if (docLessonId) {
-          await updateDoc(tx, lessonRef, docLessonId);
-        }
-        await updateDoc(tx, courseRef, null);
+      await writeAnalytics(db, {
+        courseId: courseId ? String(courseId) : "unknown",
+        lessonId: lessonId ? String(lessonId) : null,
+        date: getDateString(now),
+        mode,
+        outcome,
+        qHash,
+        exampleTruncated,
+        now,
       });
     } catch (err) {
       log("warn", stage, { code: "analytics_write_failed", message: String(err) });
@@ -1337,6 +1339,8 @@ export async function POST(req: NextRequest) {
       usage,
       sources: combinedSources,
       citations,
+      citationMeta,
+      pdfUnreadable,
       confidence,
       needsMoreContext,
       clarifyingQuestion,
