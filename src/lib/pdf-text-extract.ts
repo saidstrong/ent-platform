@@ -1,26 +1,5 @@
 import admin from "firebase-admin";
-import fs from "fs";
-import path from "path";
-import { pathToFileURL } from "url";
-import { PDFParse } from "pdf-parse";
 import { getAdminApp } from "./firebase-admin";
-
-const resolveWorkerSrc = () => {
-  try {
-    const base = path.join(process.cwd(), "node_modules", "pdf-parse", "dist", "pdf-parse");
-    const cjsWorker = path.join(base, "cjs", "pdf.worker.mjs");
-    if (fs.existsSync(cjsWorker)) {
-      return pathToFileURL(cjsWorker).toString();
-    }
-    const esmWorker = path.join(base, "esm", "pdf.worker.mjs");
-    if (fs.existsSync(esmWorker)) {
-      return pathToFileURL(esmWorker).toString();
-    }
-    return "";
-  } catch {
-    return "";
-  }
-};
 
 const getBucket = () => {
   const app = getAdminApp();
@@ -37,13 +16,24 @@ export const extractPdfTextFromStorage = async (storagePath: string, maxPages = 
   const file = bucket.file(storagePath);
   const [metadata] = await file.getMetadata();
   const [buffer] = await file.download();
-  const workerSrc = resolveWorkerSrc();
-  if (workerSrc) {
-    PDFParse.setWorker(workerSrc);
+  if (!(globalThis as any).DOMMatrix) {
+    try {
+      const polyfill = await import("dommatrix");
+      (globalThis as any).DOMMatrix = (polyfill as any).DOMMatrix || (polyfill as any).default || polyfill;
+    } catch {
+      // If the polyfill fails, pdf parsing may still fail; caller handles gracefully.
+    }
   }
-  const parser = new PDFParse({ data: buffer });
+  const mod = await import("pdf-parse");
+  const PDFParseCtor = (mod as any).PDFParse || (mod as any).default?.PDFParse;
+  if (!PDFParseCtor) {
+    throw new Error("PDFParse constructor not available.");
+  }
+  const parser = new PDFParseCtor({ data: buffer });
   const result = await parser.getText({ first: maxPages });
   const text = typeof result?.text === "string" ? result.text : "";
-  await parser.destroy();
+  if (typeof parser.destroy === "function") {
+    await parser.destroy();
+  }
   return { text: text.trim(), metadata };
 };

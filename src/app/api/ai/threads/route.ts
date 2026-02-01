@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 export async function GET(req: Request) {
   const requestId = req.headers.get("x-vercel-id") || crypto.randomUUID();
   const log = (level: "info" | "warn" | "error", stage: string, data?: Record<string, unknown>) => {
-    if (process.env.NODE_ENV === "production") return;
+    if (process.env.NODE_ENV === "production" && stage !== "admin:init") return;
     const payload = { requestId, stage, ...(data || {}) };
     if (level === "info") console.info("[ai]", payload);
     if (level === "warn") console.warn("[ai]", payload);
@@ -43,7 +43,15 @@ export async function GET(req: Request) {
     let auth;
     let db;
     try {
-      log("info", stage);
+      log("info", stage, {
+        env: {
+          FIREBASE_SERVICE_ACCOUNT_JSON: !!process.env.FIREBASE_SERVICE_ACCOUNT_JSON,
+          FIREBASE_SERVICE_ACCOUNT: !!process.env.FIREBASE_SERVICE_ACCOUNT,
+          FIREBASE_SERVICE_ACCOUNT_B64: !!process.env.FIREBASE_SERVICE_ACCOUNT_B64,
+          FIREBASE_PROJECT_ID: !!process.env.FIREBASE_PROJECT_ID,
+          GOOGLE_CLOUD_PROJECT: !!process.env.GOOGLE_CLOUD_PROJECT,
+        },
+      });
       auth = getAdminAuth();
       db = getAdminDb();
     } catch (err) {
