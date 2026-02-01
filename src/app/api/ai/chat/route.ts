@@ -10,6 +10,15 @@ const DAILY_MESSAGE_LIMIT = 20;
 const MONTHLY_TOKEN_LIMIT = 120000;
 const OPENAI_MODEL = "gpt-4.1-mini";
 
+type SourceEntry = {
+  type: "pdf" | "course";
+  title: string;
+  docId?: string;
+  pages?: number[] | { from: number; to: number };
+  excerptIds?: number[];
+  snippet?: string;
+};
+
 const getDateKey = (date: Date) => {
   const y = date.getUTCFullYear();
   const m = String(date.getUTCMonth() + 1).padStart(2, "0");
@@ -53,7 +62,8 @@ const buildContextPack = (course: any | null, lesson: any | null, lang: string) 
     pickText(course?.objectives_kz) ||
     pickText(course?.syllabus_en) ||
     pickText(course?.syllabus_kz);
-  if (courseTitle || courseDesc) {
+  const courseContextUsed = !!(courseTitle || courseDesc);
+  if (courseContextUsed) {
     parts.push(`Course: ${courseTitle}\nDetails: ${courseDesc}`.trim());
     sources.push("Course metadata");
   }
@@ -84,6 +94,7 @@ const buildContextPack = (course: any | null, lesson: any | null, lang: string) 
     contextText: parts.join("\n\n").trim(),
     sources,
     hasLessonContext: !!contextBody,
+    courseContextUsed,
   };
 };
 
@@ -190,6 +201,93 @@ const detectDefinitionQuery = (query: string) => {
   return { isDefinition: /definition|define|what is|means|refers to/i.test(lower), term: "" };
 };
 
+const isExplicitSourceQuery = (message: string) => {
+  const lower = message.toLowerCase();
+  const patterns = [
+    "according to",
+    "in this pdf",
+    "in this lesson",
+    "in this chapter",
+    "according to the pdf",
+    "according to chapter",
+    "as per",
+    "согласно",
+    "в этом pdf",
+    "в этом файле",
+    "в этом уроке",
+    "в этой главе",
+    "осы pdf",
+    "осы файл",
+    "осы сабақ",
+    "осы бөлім",
+    "бойынша",
+  ];
+  return patterns.some((pattern) => lower.includes(pattern));
+};
+
+const containsExplicitTerm = (text: string, terms: string[]) => {
+  if (!text || terms.length === 0) return false;
+  const lower = text.toLowerCase();
+  return terms.some((term) => term && lower.includes(term.toLowerCase()));
+};
+
+const getRelatedKeywords = (texts: string[], max = 5) => {
+  const combined = texts.join(" ").toLowerCase();
+  if (!combined) return [];
+  const tokens = combined
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .split(" ")
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 4);
+  const stop = new Set([
+    "that",
+    "this",
+    "with",
+    "from",
+    "into",
+    "over",
+    "they",
+    "their",
+    "your",
+    "been",
+    "were",
+    "will",
+    "also",
+    "have",
+    "has",
+    "which",
+    "what",
+    "when",
+    "where",
+    "such",
+    "these",
+    "those",
+    "от",
+    "что",
+    "это",
+    "как",
+    "для",
+    "при",
+    "или",
+    "они",
+    "их",
+    "вам",
+    "және",
+    "осы",
+    "бұл",
+    "сабақ",
+  ]);
+  const counts = new Map<string, number>();
+  for (const token of tokens) {
+    if (stop.has(token)) continue;
+    counts.set(token, (counts.get(token) || 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, max)
+    .map(([token]) => token);
+};
+
 const scoreDefinitionHit = (chunk: string, term: string) => {
   if (!term) return 0;
   const safeTerm = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -197,14 +295,21 @@ const scoreDefinitionHit = (chunk: string, term: string) => {
   return re.test(chunk) ? 50 : 0;
 };
 
-const summarizeRelated = (lang: string) => {
+const summarizeRelated = (lang: string, keywords: string[]) => {
+  const list = keywords.slice(0, 5).join(", ");
   if (lang === "kz") {
-    return "өзгеріске эмоционалдық реакциялар, қабылдауға әсер ететін факторлар, бейімделу кезеңдері, қолдау тәсілдері";
+    return list
+      ? `Берілген үзінділердегі байланысты тақырыптар: ${list}.`
+      : "Берілген үзінділерде байланысты тақырыптар бар, нақтырақ сұрақ қойыңыз.";
   }
   if (lang === "ru") {
-    return "эмоциональные реакции на изменения, факторы, влияющие на восприятие, этапы адаптации, способы поддержки";
+    return list
+      ? `Связанные темы в выдержках: ${list}.`
+      : "В выдержках есть связанные темы; уточните, что именно нужно.";
   }
-  return "emotional reactions to change, factors shaping responses, stages of adaptation, and support strategies";
+  return list
+    ? `Related topics from the excerpts: ${list}.`
+    : "Related topics appear in the excerpts; please clarify your question.";
 };
 
 const isMostlyCyrillic = (text: string) => {
@@ -584,7 +689,7 @@ export async function POST(req: NextRequest) {
     stage = "context:pack";
     log("info", stage);
     const lessonData = lessonDoc?.data() || null;
-    const { contextText, sources, hasLessonContext } = buildContextPack(
+    const { contextText, sources, hasLessonContext, courseContextUsed } = buildContextPack(
       courseDoc?.data() || null,
       lessonData,
       lang,
@@ -825,7 +930,7 @@ export async function POST(req: NextRequest) {
               selectedChunkLabels.push(chunkLabel);
               selectedChunkTexts.push(excerpt);
               const excerptEntry = excerptNumbersByResource.get(resourceId) || { name, numbers: [] };
-              excerptEntry.numbers.push(item.index + 1);
+              excerptEntry.numbers.push(item.index);
               excerptNumbersByResource.set(resourceId, excerptEntry);
             }
             if (pickedIndices.length > 0) {
@@ -855,9 +960,27 @@ export async function POST(req: NextRequest) {
     log("info", stage, { attachedCharsTotal: pdfCharsUsed, attachedPdfsCount: pdfSources.length });
 
     const combinedContextText = [contextText, ...pdfContextParts].filter(Boolean).join("\n\n").trim();
-    const combinedSources = [...sources, ...pdfSources];
     const hasPdfContext = pdfContextParts.length > 0;
     const pdfUnreadable = pdfFoundCount > 0 && !hasPdfContext;
+    const structuredSources: SourceEntry[] = [];
+    if (courseContextUsed) {
+      structuredSources.push({ type: "course", title: "Course metadata" });
+    }
+    citationMeta.forEach((entry) => {
+      const excerptIds = Array.isArray(entry.excerpts)
+        ? [...new Set(entry.excerpts)].sort((a, b) => a - b)
+        : [];
+      const pages = excerptIds.length
+        ? { from: excerptIds[0] + 1, to: excerptIds[excerptIds.length - 1] + 1 }
+        : undefined;
+      structuredSources.push({
+        type: "pdf",
+        title: entry.name,
+        docId: entry.resourceId,
+        excerptIds,
+        pages,
+      });
+    });
 
     const threadsRef = db.collection("aiThreads");
     let activeThreadId = typeof threadId === "string" && threadId.trim().length > 0 ? threadId.trim() : "";
@@ -920,6 +1043,7 @@ export async function POST(req: NextRequest) {
           log("info", stage, { status: "duplicate" });
           return NextResponse.json({
             ok: true,
+            answer: data.content || "",
             replyText: data.content || "",
             usage: { input_tokens: data.inputTokens || 0, output_tokens: data.outputTokens || 0 },
             remaining: {
@@ -959,6 +1083,56 @@ export async function POST(req: NextRequest) {
     const questionNormalized = normalizeQuestion(message);
     const qHash = hashQuestion(questionNormalized);
     const exampleTruncated = truncateText(questionNormalized, 80);
+    const relatedKeywords = getRelatedKeywords(selectedChunkTexts);
+    const explicitQuery = isExplicitSourceQuery(message);
+    const queryKeywords = Array.from(
+      new Set([
+        ...extractKeywords(message),
+        ...tokenizeQuery(message).filter((token) => token.length >= 4),
+      ]),
+    );
+    const keywordStop = new Set([
+      "according",
+      "chapter",
+      "lesson",
+      "pdf",
+      "excerpts",
+      "excerpts",
+      "согласно",
+      "глава",
+      "урок",
+      "файл",
+      "сабақ",
+      "бөлім",
+    ]);
+    const filteredKeywords = queryKeywords.filter((token) => !keywordStop.has(token));
+    const excerptLower = selectedChunkTexts.join(" ").toLowerCase();
+    const explicitMentionFound = filteredKeywords.length
+      ? containsExplicitTerm(excerptLower, filteredKeywords)
+      : true;
+    const sensitiveTerms = [
+      "cry",
+      "crying",
+      "drink",
+      "drinking",
+      "alcohol",
+      "alcoholic",
+      "tears",
+      "плак",
+      "слез",
+      "алког",
+      "пить",
+      "ішу",
+      "ішім",
+      "ішеді",
+      "жылай",
+      "көзжас",
+    ];
+    const sensitiveRequested = containsExplicitTerm(message.toLowerCase(), sensitiveTerms);
+    const sensitiveMentioned = containsExplicitTerm(excerptLower, sensitiveTerms);
+    const forceNotMentioned =
+      selectedChunkTexts.length > 0 &&
+      ((explicitQuery && !explicitMentionFound) || (sensitiveRequested && !sensitiveMentioned));
 
     if (!hasLessonContext && !hasPdfContext) {
       stage = "context:missing";
@@ -1016,7 +1190,7 @@ export async function POST(req: NextRequest) {
             courseId: String(courseId || ""),
             lessonId: String(lessonId || ""),
             uid,
-            sources: [pdfUnreadable ? "PDF unreadable" : "No lesson context available"],
+            sources: structuredSources,
             citations: [],
             citationMeta: [],
             mode,
@@ -1054,10 +1228,11 @@ export async function POST(req: NextRequest) {
         log("warn", stage, { code: "analytics_write_failed", message: String(err) });
       }
       return NextResponse.json({
+        answer: replyText,
         replyText,
         threadId: activeThreadId,
         usage,
-        sources: [pdfUnreadable ? "PDF unreadable" : "No lesson context available"],
+        sources: structuredSources,
         citations: [],
         citationMeta: [],
         pdfUnreadable,
@@ -1084,6 +1259,8 @@ export async function POST(req: NextRequest) {
         : "Full solutions are allowed when supported by citations.";
     const systemPrompt =
       `You are a helpful tutor for this platform. Use ONLY the provided context pack. If the context is insufficient, ask a clarifying question. Do not fabricate references or facts. ` +
+      `If the user asks "according to the PDF/lesson/chapter" and the information is not present in the provided excerpts, respond exactly: "Not mentioned in the provided excerpts." Then provide only related context labeled as related, and ask one clarifying question. ` +
+      `Do not include sources or citations text inside the answer string. ` +
       `Output must be ONLY in ${lang}. Do not mix languages. Translate any excerpt content into ${lang}. ` +
       `${styleInstruction} ${policyInstruction} ${fullSolutionInstruction} ` +
       `Return a JSON object with keys: answer (string), citations (array of chunk ids), confidence ("low"|"medium"|"high"), needsMoreContext (boolean), clarifyingQuestion (string or null). ` +
@@ -1147,29 +1324,50 @@ export async function POST(req: NextRequest) {
         // keep raw reply
       }
     }
+    replyText = replyText.replace(/^\s*(Sources?|Citations?)\s*:.*$/gim, "").trim();
 
     stage = "openai:validate";
     log("info", stage);
-    const relatedSummary = summarizeRelated(lang);
+    const relatedSummary = summarizeRelated(lang, relatedKeywords);
     const unsupportedTemplates = {
       en: {
         noSupport: "I can’t find direct support for that in the provided excerpts.",
-        related: `Here’s what the excerpts do say that’s related: ${relatedSummary}`,
+        related: `Related context (from excerpts): ${relatedSummary}`,
         question: "Clarifying question: Which specific section or concept should I focus on?",
       },
       kz: {
         noSupport: "Берілген үзінділерде бұл сұраққа тікелей дәлел табылмады.",
-        related: `Мәтінде осыған жақын айтылғаны: ${relatedSummary}`,
+        related: `Үзінділердегі байланысты мазмұн: ${relatedSummary}`,
         question: "Нақтылау сұрағы: Қай бөлімге немесе қандай ұғымға назар аударғаным дұрыс?",
       },
       ru: {
         noSupport: "В предоставленных отрывках нет прямого подтверждения этому.",
-        related: `Вот что в отрывках упоминается по теме: ${relatedSummary}`,
+        related: `Связанная информация из выдержек: ${relatedSummary}`,
         question: "Уточняющий вопрос: на какой раздел или термин стоит ориентироваться?",
       },
     };
     const template = unsupportedTemplates[lang as "en" | "kz" | "ru"] || unsupportedTemplates.en;
     const unsupportedResponse = `${template.noSupport}\n${template.related}\n${template.question}`;
+    const notMentionedTemplates = {
+      en: {
+        statement: "Not mentioned in the provided excerpts.",
+        related: `Related context (from excerpts): ${relatedSummary}`,
+        question: template.question,
+      },
+      kz: {
+        statement: "Берілген үзінділерде бұл туралы нақты айтылмайды.",
+        related: `Үзінділердегі байланысты мазмұн: ${relatedSummary}`,
+        question: template.question,
+      },
+      ru: {
+        statement: "В предоставленных выдержках это не упоминается.",
+        related: `Связанная информация из выдержек: ${relatedSummary}`,
+        question: template.question,
+      },
+    };
+    const notMentionedTemplate =
+      notMentionedTemplates[lang as "en" | "kz" | "ru"] || notMentionedTemplates.en;
+    const notMentionedResponse = `${notMentionedTemplate.statement}\n${notMentionedTemplate.related}\n${notMentionedTemplate.question}`;
 
     const hintTemplates = {
       en: {
@@ -1203,6 +1401,13 @@ export async function POST(req: NextRequest) {
     const languageMismatch =
       (lang === "en" && isMostlyCyrillic(replyText)) ||
       ((lang === "kz" || lang === "ru") && isMostlyLatin(replyText));
+    if (forceNotMentioned) {
+      replyText = notMentionedResponse;
+      citations = Array.from(selectedChunkIds).slice(0, 2);
+      confidence = "low";
+      needsMoreContext = true;
+      clarifyingQuestion = notMentionedTemplate.question.replace(/^Clarifying question:\s*/i, "").trim();
+    }
     if (forceHint) {
       replyText = hintResponse;
       citations = Array.from(selectedChunkIds).slice(0, 2);
@@ -1215,7 +1420,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (!forceHint && (citationIssue || needsMoreContext || languageMismatch)) {
+    if (!forceHint && !forceNotMentioned && (citationIssue || needsMoreContext || languageMismatch)) {
       log("warn", stage, {
         code: citationIssue ? "openai_invalid_citations" : "openai_language_mismatch",
         invalidCitations: citationIssue,
@@ -1292,7 +1497,7 @@ export async function POST(req: NextRequest) {
           courseId: String(courseId || ""),
           lessonId: String(lessonId || ""),
           uid,
-          sources: combinedSources,
+          sources: structuredSources,
           citations,
           citationMeta,
           mode,
@@ -1331,10 +1536,11 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({
+      answer: replyText,
       replyText,
       threadId: activeThreadId,
       usage,
-      sources: combinedSources,
+      sources: structuredSources,
       citations,
       citationMeta,
       pdfUnreadable,

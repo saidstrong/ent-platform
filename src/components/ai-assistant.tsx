@@ -11,7 +11,7 @@ import { useI18n } from "../lib/i18n";
 type AssistantMessage = {
   role: "user" | "assistant";
   text: string;
-  sources?: string[];
+  sources?: SourceEntry[] | string[];
   citations?: string[];
   citationMeta?: Array<{ resourceId: string; name: string; excerpts?: number[] }>;
   mode?: string;
@@ -28,7 +28,7 @@ type ThreadMessage = {
   id: string;
   role: "user" | "assistant" | "system";
   content: string;
-  sources?: string[];
+  sources?: SourceEntry[] | string[];
   citations?: string[];
   citationMeta?: Array<{ resourceId: string; name: string; excerpts?: number[] }>;
   mode?: string;
@@ -46,9 +46,19 @@ type CitationPreview = {
   id: string;
   name?: string;
   snippet?: string;
+  pageLabel?: string;
   loading?: boolean;
   error?: string;
   messageKey: string;
+};
+
+type SourceEntry = {
+  type: "pdf" | "course";
+  title: string;
+  docId?: string;
+  pages?: number[] | { from: number; to: number };
+  excerptIds?: number[];
+  snippet?: string;
 };
 
 type AssistantState = {
@@ -252,11 +262,12 @@ export const AssistantPanel = () => {
         }
         throw new Error(payload?.error || t("ai.genericError"));
       }
+      const answerText = typeof payload?.answer === "string" ? payload.answer : payload.replyText;
       if (activeThreadId) {
         upsertThreadMessage({
           id: `a_${clientRequestId}`,
           role: "assistant",
-          content: payload.replyText,
+          content: answerText,
           sources: payload.sources,
           citations: payload.citations,
           citationMeta: payload.citationMeta,
@@ -268,7 +279,7 @@ export const AssistantPanel = () => {
           ...prev,
           {
             role: "assistant",
-            text: payload.replyText,
+            text: answerText,
             sources: payload.sources,
             citations: payload.citations,
             citationMeta: payload.citationMeta,
@@ -366,99 +377,137 @@ export const AssistantPanel = () => {
   }, [open, dedupedThreadMessages.length, messages.length, sending]);
 
   const renderMeta = (
-    sources?: string[],
+    sources?: SourceEntry[] | string[],
     citations?: string[],
     messageKey?: string,
     answerText?: string,
     citationMeta?: ThreadMessage["citationMeta"],
   ) => {
-    if ((!sources || sources.length === 0) && (!citations || citations.length === 0)) return null;
+    if ((!sources || sources.length === 0) && (!citations || citations.length === 0) && !citationMeta?.length) {
+      return null;
+    }
+
+    const normalizeSources = () => {
+      const normalized: SourceEntry[] = [];
+      if (Array.isArray(sources) && sources.length > 0) {
+        if (typeof sources[0] === "string") {
+          (sources as string[]).forEach((entry) => {
+            if (!entry) return;
+            if (entry.toLowerCase().includes("course metadata")) {
+              normalized.push({ type: "course", title: "Course metadata" });
+              return;
+            }
+            const match = entry.match(/^(.*)\s+excerpts:\s*(.+)$/i);
+            if (match) {
+              const excerptIds = match[2]
+                .split(",")
+                .map((value) => Number(value.trim()))
+                .filter((value) => Number.isFinite(value));
+              normalized.push({ type: "pdf", title: match[1].trim(), excerptIds });
+              return;
+            }
+            normalized.push({ type: "pdf", title: entry.trim() });
+          });
+        } else {
+          (sources as SourceEntry[]).forEach((entry) => {
+            if (entry?.type) {
+              normalized.push(entry);
+              return;
+            }
+            normalized.push({
+              type: "pdf",
+              title: entry?.title || "PDF",
+              docId: entry?.docId,
+              pages: entry?.pages,
+              excerptIds: entry?.excerptIds,
+              snippet: entry?.snippet,
+            });
+          });
+        }
+      }
+      if (normalized.length === 0 && citationMeta?.length) {
+        citationMeta.forEach((meta) => {
+          normalized.push({
+            type: "pdf",
+            title: meta.name,
+            docId: meta.resourceId,
+            excerptIds: meta.excerpts,
+          });
+        });
+      }
+      return normalized;
+    };
+
+    const normalizedSources = normalizeSources();
     const nameByResource = new Map<string, string>();
+    normalizedSources.forEach((entry) => {
+      if (entry.docId && entry.title) {
+        nameByResource.set(entry.docId, entry.title);
+      }
+    });
     (citationMeta || []).forEach((meta) => {
       if (meta?.resourceId && meta?.name) {
         nameByResource.set(meta.resourceId, meta.name);
       }
     });
-    const inferredSources: string[] = [];
-    (sources || []).forEach((source) => {
-      if (!source) return;
-      if (!source.includes("(")) {
-        inferredSources.push(source);
-        return;
-      }
-      const [namePart, idsPartRaw] = source.split("(");
-      const idsPart = idsPartRaw?.replace(")", "") || "";
-      const ids = idsPart.split(",").map((id) => id.trim()).filter(Boolean);
-      ids.forEach((id) => {
-        const [resourceId] = id.split("#");
-        if (resourceId && !nameByResource.has(resourceId)) {
-          nameByResource.set(resourceId, namePart.trim());
-        }
-      });
-    });
-    const grouped = new Map<string, { name: string; excerpts: string[] }>();
-    (citations || []).forEach((id) => {
-      const [resourceId, chunkRaw] = id.split("#");
-      if (!resourceId) return;
-      const entry = grouped.get(resourceId) || {
-        name: nameByResource.get(resourceId) || resourceId,
-        excerpts: [],
-      };
-      const numeric = Number(chunkRaw);
-      const display = Number.isFinite(numeric) ? String(numeric + 1) : chunkRaw;
-      if (display && !entry.excerpts.includes(display)) {
-        entry.excerpts.push(display);
-      }
-      grouped.set(resourceId, entry);
-    });
-    const groupedLabels = Array.from(grouped.values()).map((entry) => {
-      const excerpts = entry.excerpts
-        .map((value) => Number(value))
-        .filter((value) => Number.isFinite(value))
-        .sort((a, b) => a - b)
-        .map((value) => String(value));
-      const label = excerpts.length > 0 ? `${entry.name} excerpts: ${excerpts.join(", ")}` : entry.name;
-      return label;
-    });
-    if (groupedLabels.length === 0 && citationMeta?.length) {
-      citationMeta.forEach((meta) => {
-        const excerpts = (meta.excerpts || []).map((value) => String(value));
-        const label = excerpts.length > 0 ? `${meta.name} excerpts: ${excerpts.join(", ")}` : meta.name;
-        groupedLabels.push(label);
-      });
-    }
-    const summaryParts = [...new Set([...inferredSources, ...groupedLabels])];
 
+    const formatPages = (pages?: SourceEntry["pages"]) => {
+      if (!pages) return "";
+      if (Array.isArray(pages)) {
+        const unique = Array.from(new Set(pages)).sort((a, b) => a - b);
+        return unique.join(", ");
+      }
+      return pages.from && pages.to ? `${pages.from}–${pages.to}` : "";
+    };
+
+    const summaryParts = normalizedSources.map((entry) => {
+      if (entry.type === "course") return entry.title || "Course metadata";
+      const excerptIds = entry.excerptIds ? [...new Set(entry.excerptIds)].sort((a, b) => a - b) : [];
+      const pages = formatPages(entry.pages);
+      if (pages && excerptIds.length) {
+        return `${entry.title} pages: ${pages} (excerpts: ${excerptIds.join(", ")})`;
+      }
+      if (pages) {
+        return `${entry.title} pages: ${pages}`;
+      }
+      if (excerptIds.length) {
+        return `${entry.title} excerpts: ${excerptIds.join(", ")}`;
+      }
+      return entry.title;
+    });
+
+    const showCitations = messageKey ? !!expandedCitations[messageKey] : false;
+    const referencesCount = citations?.length || 0;
     const formatCitationLabel = (id: string) => {
       const [resourceId, chunkRaw] = id.split("#");
-      const name = nameByResource.get(resourceId) || resourceId;
+      const name = nameByResource.get(resourceId) || "PDF";
       const numeric = Number(chunkRaw);
-      const display = Number.isFinite(numeric) ? numeric + 1 : chunkRaw ?? "";
+      const display = Number.isFinite(numeric) ? String(numeric) : chunkRaw ?? "";
       return `${name} — excerpt ${display}`.trim();
     };
-    const showCitations = messageKey ? !!expandedCitations[messageKey] : false;
+
     return (
-      <div className="mt-2 space-y-1 text-[11px] text-neutral-500">
+      <div className="mt-2 space-y-2 text-[11px] text-neutral-500">
         {summaryParts.length ? (
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-semibold">{t("ai.sources")}:</span>
             <span>{summaryParts.join("; ")}</span>
-            {answerText ? (
-              <button
-                type="button"
-                className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-blue-600 hover:text-blue-700"
-                onClick={() => {
-                  if (typeof navigator === "undefined" || !navigator.clipboard) return;
-                  navigator.clipboard.writeText(answerText).catch(() => null);
-                }}
-              >
-                {t("ai.copyAnswer")}
-              </button>
-            ) : null}
           </div>
         ) : null}
-        {citations?.length ? (
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {answerText ? (
+            <button
+              type="button"
+              className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-blue-600 hover:text-blue-700"
+              onClick={() => {
+                if (typeof navigator === "undefined" || !navigator.clipboard) return;
+                navigator.clipboard.writeText(answerText).catch(() => null);
+              }}
+            >
+              {t("ai.copyAnswer")}
+            </button>
+          ) : null}
+          {referencesCount > 0 ? (
             <button
               type="button"
               className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-blue-600 hover:text-blue-700"
@@ -467,29 +516,28 @@ export const AssistantPanel = () => {
                 setExpandedCitations((prev) => ({ ...prev, [messageKey]: !prev[messageKey] }));
               }}
             >
-              {showCitations ? t("ai.hideCitations") : t("ai.showCitations")}
+              {showCitations ? t("ai.hideCitations") : `${t("ai.showCitations")} (${referencesCount})`}
             </button>
-            {showCitations && (
-              <div className="flex flex-wrap items-center gap-1">
-                <span className="font-semibold">{t("ai.citations")}:</span>
-                {citations.map((id) => (
-                  <span
-                    key={id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => openCitation(id, messageKey)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        openCitation(id, messageKey);
-                      }
-                    }}
-                    className="rounded bg-neutral-200 px-1.5 py-0.5 font-mono text-[10px] text-neutral-700 hover:bg-neutral-300"
-                  >
-                    {formatCitationLabel(id)}
-                  </span>
-                ))}
-              </div>
-            )}
+          ) : null}
+        </div>
+        {showCitations && citations?.length ? (
+          <div className="flex flex-wrap items-center gap-1">
+            {citations.map((id) => (
+              <span
+                key={id}
+                role="button"
+                tabIndex={0}
+                onClick={() => openCitation(id, messageKey)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    openCitation(id, messageKey);
+                  }
+                }}
+                className="rounded bg-neutral-200 px-1.5 py-0.5 font-mono text-[10px] text-neutral-700 hover:bg-neutral-300"
+              >
+                {formatCitationLabel(id)}
+              </span>
+            ))}
           </div>
         ) : null}
       </div>
@@ -511,15 +559,49 @@ export const AssistantPanel = () => {
         });
         return;
       }
+      const formatPages = (pages?: SourceEntry["pages"]) => {
+        if (!pages) return "";
+        if (Array.isArray(pages)) {
+          const unique = Array.from(new Set(pages)).sort((a, b) => a - b);
+          return unique.join(", ");
+        }
+        return pages.from && pages.to ? `${pages.from}–${pages.to}` : "";
+      };
+      const findMessageByKey = () => {
+        const threadMatch = dedupedThreadMessages.find((msg) => msg.id === ownerKey);
+        if (threadMatch) return threadMatch;
+        return messages.find((msg, index) => `local-${index}` === ownerKey);
+      };
+      let pageLabel = "";
+      const message = findMessageByKey();
+      if (message && Array.isArray(message.sources) && message.sources.length > 0 && typeof message.sources[0] !== "string") {
+        const [resourceId] = citationId.split("#");
+        const entry = (message.sources as SourceEntry[]).find(
+          (source) => source.type === "pdf" && source.docId === resourceId,
+        );
+        const pages = entry ? formatPages(entry.pages) : "";
+        if (pages) {
+          pageLabel = `Pages: ${pages}`;
+        }
+      }
       setCitationPreview({
         id: citationId,
         name: payload?.name,
         snippet: payload?.snippet,
+        pageLabel,
         messageKey: ownerKey,
       });
     } catch {
       setCitationPreview({ id: citationId, error: t("ai.genericError"), messageKey: ownerKey });
     }
+  };
+
+  const formatExcerptLabel = (citationId?: string) => {
+    if (!citationId) return "";
+    const [, raw] = citationId.split("#");
+    const index = Number(raw);
+    if (Number.isFinite(index)) return `Excerpt ${index}`;
+    return citationId;
   };
 
   const renameThread = async () => {
@@ -655,7 +737,12 @@ export const AssistantPanel = () => {
                 {citationPreview.loading && <div>{t("ai.sending")}</div>}
                 {citationPreview.error && <div className="text-red-600">{citationPreview.error}</div>}
                 {citationPreview.snippet && <div>{citationPreview.snippet}</div>}
-                <div className="mt-1 font-mono text-[10px] text-neutral-400">{citationPreview.id}</div>
+                {citationPreview.pageLabel && (
+                  <div className="text-[10px] text-neutral-500">{citationPreview.pageLabel}</div>
+                )}
+                {citationPreview.id && (
+                  <div className="mt-1 text-[10px] text-neutral-400">{formatExcerptLabel(citationPreview.id)}</div>
+                )}
               </div>
             )}
           </div>
@@ -685,7 +772,14 @@ export const AssistantPanel = () => {
                   {citationPreview.loading && <div>{t("ai.sending")}</div>}
                   {citationPreview.error && <div className="text-red-600">{citationPreview.error}</div>}
                   {citationPreview.snippet && <div>{citationPreview.snippet}</div>}
-                  <div className="mt-1 font-mono text-[10px] text-neutral-400">{citationPreview.id}</div>
+                  {citationPreview.pageLabel && (
+                    <div className="text-[10px] text-neutral-500">{citationPreview.pageLabel}</div>
+                  )}
+                  {citationPreview.id && (
+                    <div className="mt-1 text-[10px] text-neutral-400">
+                      {formatExcerptLabel(citationPreview.id)}
+                    </div>
+                  )}
                 </div>
               )}
           </div>
@@ -705,7 +799,12 @@ export const AssistantPanel = () => {
             {citationPreview.loading && <p className="text-xs text-neutral-500">{t("ai.sending")}</p>}
             {citationPreview.error && <p className="text-xs text-red-600">{citationPreview.error}</p>}
             {citationPreview.snippet && <p className="text-sm text-neutral-700">{citationPreview.snippet}</p>}
-            <p className="mt-2 font-mono text-[10px] text-neutral-400">{citationPreview.id}</p>
+            {citationPreview.pageLabel && (
+              <p className="text-[11px] text-neutral-500">{citationPreview.pageLabel}</p>
+            )}
+            {citationPreview.id && (
+              <p className="mt-2 text-[10px] text-neutral-400">{formatExcerptLabel(citationPreview.id)}</p>
+            )}
           </div>
         </>
       )}
