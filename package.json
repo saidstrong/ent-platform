@@ -13,6 +13,7 @@
     "backfill": "tsx scripts/backfill-enrollments.ts --creds ./serviceAccountKey.json"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.0",
     "clsx": "^2.1.1",
     "dommatrix": "^0.1.1",
     "firebase": "^11.2.0",

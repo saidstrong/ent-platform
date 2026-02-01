@@ -1,5 +1,19 @@
 import admin from "firebase-admin";
 
+type AdminServicesOk = {
+  ok: true;
+  app: admin.app.App;
+  auth: admin.auth.Auth;
+  db: FirebaseFirestore.Firestore;
+};
+
+type AdminServicesError = {
+  ok: false;
+  code: "admin_not_configured";
+  stage: "admin:init";
+  detail: string;
+};
+
 const getServiceAccount = () => {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT || process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (!raw) return null;
@@ -50,3 +64,13 @@ export const getAdminApp = () => {
 
 export const getAdminAuth = () => getAdminApp().auth();
 export const getAdminDb = () => getAdminApp().firestore();
+
+export const getAdminServicesSafe = (): AdminServicesOk | AdminServicesError => {
+  try {
+    const app = getAdminApp();
+    return { ok: true, app, auth: app.auth(), db: app.firestore() };
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    return { ok: false, code: "admin_not_configured", stage: "admin:init", detail };
+  }
+};

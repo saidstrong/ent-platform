@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import admin from "firebase-admin";
-import { getAdminAuth, getAdminDb } from "../../../../lib/firebase-admin";
+import { getAdminServicesSafe } from "../../../../lib/firebase-admin";
 import { extractPdfTextFromStorage } from "../../../../lib/pdf-text-extract";
 import { createHash } from "crypto";
 
@@ -461,24 +461,21 @@ export async function POST(req: NextRequest) {
     }
 
     stage = "admin:init";
-    let auth;
-    let db;
-    try {
-      log("info", stage, {
-        env: {
-          FIREBASE_SERVICE_ACCOUNT_JSON: !!process.env.FIREBASE_SERVICE_ACCOUNT_JSON,
-          FIREBASE_SERVICE_ACCOUNT: !!process.env.FIREBASE_SERVICE_ACCOUNT,
-          FIREBASE_SERVICE_ACCOUNT_B64: !!process.env.FIREBASE_SERVICE_ACCOUNT_B64,
-          FIREBASE_PROJECT_ID: !!process.env.FIREBASE_PROJECT_ID,
-          GOOGLE_CLOUD_PROJECT: !!process.env.GOOGLE_CLOUD_PROJECT,
-        },
-      });
-      auth = getAdminAuth();
-      db = getAdminDb();
-    } catch (err) {
-      log("error", stage, { code: "admin_not_configured", message: String(err) });
-      return respondError(500, stage, "admin_not_configured", "Firebase Admin is not configured.");
+    log("info", stage, {
+      env: {
+        FIREBASE_SERVICE_ACCOUNT_JSON: !!process.env.FIREBASE_SERVICE_ACCOUNT_JSON,
+        FIREBASE_SERVICE_ACCOUNT: !!process.env.FIREBASE_SERVICE_ACCOUNT,
+        FIREBASE_SERVICE_ACCOUNT_B64: !!process.env.FIREBASE_SERVICE_ACCOUNT_B64,
+        FIREBASE_PROJECT_ID: !!process.env.FIREBASE_PROJECT_ID,
+        GOOGLE_CLOUD_PROJECT: !!process.env.GOOGLE_CLOUD_PROJECT,
+      },
+    });
+    const adminServices = getAdminServicesSafe();
+    if (!adminServices.ok) {
+      log("error", stage, { code: adminServices.code, message: adminServices.detail });
+      return respondError(500, stage, adminServices.code, "Firebase Admin is not configured.");
     }
+    const { auth, db } = adminServices;
     let uid = "";
     try {
       stage = "auth:verify";

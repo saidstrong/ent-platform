@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import admin from "firebase-admin";
-import { getAdminAuth, getAdminDb } from "../../../../../lib/firebase-admin";
+import { getAdminServicesSafe } from "../../../../../lib/firebase-admin";
 
 export const runtime = "nodejs";
 
@@ -50,16 +50,13 @@ export async function GET(
     }
 
     stage = "admin:init";
-    let auth;
-    let db;
-    try {
-      log("info", stage);
-      auth = getAdminAuth();
-      db = getAdminDb();
-    } catch (err) {
-      log("error", stage, { code: "admin_not_configured", message: String(err) });
-      return respondError(500, stage, "admin_not_configured", "Firebase Admin is not configured.");
+    log("info", stage);
+    const adminServices = getAdminServicesSafe();
+    if (!adminServices.ok) {
+      log("error", stage, { code: adminServices.code, message: adminServices.detail });
+      return respondError(500, stage, adminServices.code, "Firebase Admin is not configured.");
     }
+    const { auth, db } = adminServices;
 
     let uid = "";
     try {
@@ -130,16 +127,13 @@ export async function PATCH(
     }
 
     stage = "admin:init";
-    let auth;
-    let db;
-    try {
-      log("info", stage);
-      auth = getAdminAuth();
-      db = getAdminDb();
-    } catch (err) {
-      log("error", stage, { code: "admin_not_configured", message: String(err) });
-      return respondError(500, stage, "admin_not_configured", "Firebase Admin is not configured.");
+    log("info", stage);
+    const adminServices = getAdminServicesSafe();
+    if (!adminServices.ok) {
+      log("error", stage, { code: adminServices.code, message: adminServices.detail });
+      return respondError(500, stage, adminServices.code, "Firebase Admin is not configured.");
     }
+    const { auth, db } = adminServices;
 
     stage = "req:parse";
     log("info", stage);
@@ -225,16 +219,13 @@ export async function DELETE(
     }
 
     stage = "admin:init";
-    let auth;
-    let db;
-    try {
-      log("info", stage);
-      auth = getAdminAuth();
-      db = getAdminDb();
-    } catch (err) {
-      log("error", stage, { code: "admin_not_configured", message: String(err) });
-      return respondError(500, stage, "admin_not_configured", "Firebase Admin is not configured.");
+    log("info", stage);
+    const adminServices = getAdminServicesSafe();
+    if (!adminServices.ok) {
+      log("error", stage, { code: adminServices.code, message: adminServices.detail });
+      return respondError(500, stage, adminServices.code, "Firebase Admin is not configured.");
     }
+    const { auth, db } = adminServices;
 
     let uid = "";
     try {
