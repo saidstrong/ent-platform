@@ -140,6 +140,11 @@ export default function TeacherDashboardPage() {
                 <div key={course.id} className="rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm">
                   <p className="font-semibold">{course.title_en}</p>
                   <p className="text-xs text-neutral-500">{course.tags?.join(" • ")}</p>
+                  <div className="mt-2">
+                    <Link className="text-xs text-blue-700" href={`/teacher/courses/${course.id}/ai`}>
+                      AI analytics
+                    </Link>
+                  </div>
                 </div>
               ))}
               {courses.length === 0 && <p className="text-sm text-neutral-600">No courses found.</p>}

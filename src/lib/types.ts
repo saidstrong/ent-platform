@@ -8,6 +8,14 @@ export type PaymentStatus = "pending" | "approved" | "rejected";
 
 export type Language = "kz" | "en";
 
+export type AiPolicy = {
+  allowDirectAnswers?: boolean;
+  allowFullSolutions?: boolean;
+  style?: "explain" | "socratic";
+  citationRequired?: boolean;
+  maxAnswerLength?: number;
+};
+
 export interface UserProfile {
   uid: string;
   role: Role;
@@ -33,6 +41,7 @@ export interface Course {
   published: boolean;
   createdAt?: string;
   updatedAt?: string;
+  aiPolicy?: AiPolicy;
 }
 
 export interface Module {
@@ -58,6 +67,7 @@ export interface Lesson {
   attachments?: { name: string; url: string }[];
   resources?: LessonResource[];
   createdAt?: string;
+  aiPolicy?: AiPolicy;
 }
 
 export type LessonResource = {

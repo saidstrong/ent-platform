@@ -26,14 +26,16 @@ export const Navbar = () => {
 
   return (
     <header className="sticky top-0 z-20 w-full max-w-full overflow-x-hidden border-b border-neutral-200 bg-white/70 backdrop-blur">
-      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-3 py-3 sm:px-4 md:py-4">
-        <div className="flex min-w-0 items-center gap-3">
+      <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-2 px-3 py-3 sm:px-4 md:py-4">
+        <div className="flex min-w-0 items-center gap-2">
           <button className="rounded-md border border-neutral-200 p-2 md:hidden" onClick={() => setOpen((v) => !v)} aria-label={t("nav.toggleMenu")}>
             <Menu size={18} />
           </button>
-          <Link href="/" className="truncate text-lg font-semibold text-blue-700">
-            XY-School
-          </Link>
+          <div className="min-w-0">
+            <Link href="/" className="block truncate text-lg font-semibold text-blue-700">
+              XY-School
+            </Link>
+          </div>
           <nav className="hidden items-center gap-4 md:flex">
             <NavLink href="/courses" label={t("nav.courses")} />
             {user && <NavLink href="/my-courses" label={t("nav.myCourses")} />}
@@ -42,8 +44,8 @@ export const Navbar = () => {
             {(isTeacher(profile?.role) || isAdmin(profile?.role)) && <NavLink href="/teacher" label={t("nav.teacher")} />}
           </nav>
         </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <div className="flex min-w-0 items-center gap-1 rounded-full border border-neutral-200 bg-white px-2 py-1 text-xs font-semibold">
+        <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1 rounded-full border border-neutral-200 bg-white px-2 py-1 text-xs font-semibold">
             <Globe size={14} className="text-blue-600" />
             <button className={`px-2 ${lang === "kz" ? "text-blue-700" : "text-neutral-500"}`} onClick={() => setLang("kz")}>
               KZ
@@ -62,10 +64,19 @@ export const Navbar = () => {
             </div>
           ) : (
             <>
-              <Button variant="ghost" size="sm" className="md:px-4 md:py-2 md:text-sm" onClick={() => router.push("/login")}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="px-3 py-2 text-sm whitespace-nowrap md:px-4 md:py-2 md:text-sm"
+                onClick={() => router.push("/login")}
+              >
                 {t("nav.login")}
               </Button>
-              <Button size="sm" className="md:px-4 md:py-2 md:text-sm" onClick={() => router.push("/signup")}>
+              <Button
+                size="sm"
+                className="hidden px-3 py-2 text-sm whitespace-nowrap sm:inline-flex md:px-4 md:py-2 md:text-sm"
+                onClick={() => router.push("/signup")}
+              >
                 {t("nav.signup")}
               </Button>
             </>
@@ -80,6 +91,16 @@ export const Navbar = () => {
             {user && <NavLink href="/dashboard" label={t("nav.dashboard")} />}
             {isAdmin(profile?.role) && <NavLink href="/admin" label={t("nav.admin")} />}
             {(isTeacher(profile?.role) || isAdmin(profile?.role)) && <NavLink href="/teacher" label={t("nav.teacher")} />}
+            {!user && (
+              <div className="flex flex-col gap-2 pt-2">
+                <Button variant="ghost" size="sm" onClick={() => router.push("/login")}>
+                  {t("nav.login")}
+                </Button>
+                <Button size="sm" onClick={() => router.push("/signup")}>
+                  {t("nav.signup")}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       )}

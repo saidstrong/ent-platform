@@ -31,6 +31,7 @@ import {
 } from "../../../../lib/data";
 import { uploadQuizImage } from "../../../../lib/storage";
 import type {
+  AiPolicy,
   Course,
   Lesson,
   LessonResource,
@@ -60,6 +61,13 @@ export default function AdminCourseDetailPage() {
     description_en: "",
     price: 0,
     published: false,
+  });
+  const [aiPolicyForm, setAiPolicyForm] = useState<Required<AiPolicy>>({
+    allowDirectAnswers: true,
+    allowFullSolutions: true,
+    style: "explain",
+    citationRequired: true,
+    maxAnswerLength: 0,
   });
   const [savingCourse, setSavingCourse] = useState(false);
   const [modules, setModules] = useState<Module[]>([]);
@@ -201,6 +209,14 @@ export default function AdminCourseDetailPage() {
         price: nextCourse.price || 0,
         published: !!nextCourse.published,
       });
+      const policy = (nextCourse.aiPolicy || {}) as AiPolicy;
+      setAiPolicyForm({
+        allowDirectAnswers: policy.allowDirectAnswers ?? true,
+        allowFullSolutions: policy.allowFullSolutions ?? true,
+        style: policy.style ?? "explain",
+        citationRequired: policy.citationRequired ?? true,
+        maxAnswerLength: policy.maxAnswerLength ?? 0,
+      });
     });
     adminListModules(courseId).then(async (mods) => {
       setModules(mods);
@@ -224,6 +240,13 @@ export default function AdminCourseDetailPage() {
     await adminUpdateCourse(courseId, {
       ...courseForm,
       price: Number(courseForm.price) || 0,
+      aiPolicy: {
+        allowDirectAnswers: !!aiPolicyForm.allowDirectAnswers,
+        allowFullSolutions: !!aiPolicyForm.allowFullSolutions,
+        style: aiPolicyForm.style || "explain",
+        citationRequired: !!aiPolicyForm.citationRequired,
+        maxAnswerLength: aiPolicyForm.maxAnswerLength || 0,
+      },
     });
     setSavingCourse(false);
     load();
@@ -715,6 +738,57 @@ export default function AdminCourseDetailPage() {
             </Button>
           </div>
         </form>
+      </Card>
+      <Card>
+        <h3 className="mb-3 text-lg font-semibold">AI Policy</h3>
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="flex items-center gap-2 text-sm text-neutral-700">
+            <input
+              type="checkbox"
+              checked={aiPolicyForm.allowDirectAnswers}
+              onChange={(e) => setAiPolicyForm((prev) => ({ ...prev, allowDirectAnswers: e.target.checked }))}
+            />
+            Allow direct answers (quiz/assignment)
+          </label>
+          <label className="flex items-center gap-2 text-sm text-neutral-700">
+            <input
+              type="checkbox"
+              checked={aiPolicyForm.allowFullSolutions}
+              onChange={(e) => setAiPolicyForm((prev) => ({ ...prev, allowFullSolutions: e.target.checked }))}
+            />
+            Allow full solutions
+          </label>
+          <div className="space-y-1">
+            <label className="text-sm font-semibold text-neutral-700">Help style</label>
+            <Select
+              value={aiPolicyForm.style}
+              onChange={(e) => {
+                const nextStyle = e.target.value === "socratic" ? "socratic" : "explain";
+                setAiPolicyForm((prev) => ({ ...prev, style: nextStyle }));
+              }}
+            >
+              <option value="explain">Explain</option>
+              <option value="socratic">Socratic</option>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-semibold text-neutral-700">Max answer length (optional)</label>
+            <Input
+              type="number"
+              min={0}
+              value={aiPolicyForm.maxAnswerLength}
+              onChange={(e) => setAiPolicyForm((prev) => ({ ...prev, maxAnswerLength: Number(e.target.value || 0) }))}
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm text-neutral-700 md:col-span-2">
+            <input
+              type="checkbox"
+              checked={aiPolicyForm.citationRequired}
+              onChange={(e) => setAiPolicyForm((prev) => ({ ...prev, citationRequired: e.target.checked }))}
+            />
+            Require citations when sources are available
+          </label>
+        </div>
       </Card>
       <div className="grid gap-4 lg:grid-cols-3">
         <Card>
