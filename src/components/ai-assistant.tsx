@@ -2,16 +2,21 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, usePathname } from "next/navigation";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import Button from "./ui/button";
 import Textarea from "./ui/textarea";
 import Card from "./ui/card";
 import { useAuth } from "../lib/auth-context";
 import { useI18n } from "../lib/i18n";
+import { fetchLesson } from "../lib/data";
 
 type AssistantMessage = {
   role: "user" | "assistant";
   text: string;
   sources?: SourceEntry[] | string[];
+  sourcesSummary?: string;
+  references?: ReferenceEntry[];
   citations?: string[];
   citationMeta?: Array<{ resourceId: string; name: string; excerpts?: number[] }>;
   mode?: string;
@@ -29,6 +34,8 @@ type ThreadMessage = {
   role: "user" | "assistant" | "system";
   content: string;
   sources?: SourceEntry[] | string[];
+  sourcesSummary?: string;
+  references?: ReferenceEntry[];
   citations?: string[];
   citationMeta?: Array<{ resourceId: string; name: string; excerpts?: number[] }>;
   mode?: string;
@@ -53,12 +60,27 @@ type CitationPreview = {
 };
 
 type SourceEntry = {
-  type: "pdf" | "course";
+  type: "pdf" | "course" | "youtube";
   title: string;
   docId?: string;
   pages?: number[] | { from: number; to: number };
   excerptIds?: number[];
   snippet?: string;
+};
+
+type ReferenceEntry = {
+  type: "pdf" | "course" | "youtube";
+  title: string;
+  label: string;
+  excerptIndex?: number;
+  page?: number;
+  snippet?: string;
+};
+
+type SourceOption = {
+  id: string;
+  type: "pdf" | "youtube";
+  title: string;
 };
 
 type AssistantState = {
@@ -109,6 +131,10 @@ export const AssistantPanel = () => {
   const [threadBusy, setThreadBusy] = useState(false);
   const [citationPreview, setCitationPreview] = useState<CitationPreview | null>(null);
   const [expandedCitations, setExpandedCitations] = useState<Record<string, boolean>>({});
+  const [availableSources, setAvailableSources] = useState<SourceOption[]>([]);
+  const [selectedSources, setSelectedSources] = useState<SourceOption[]>([]);
+  const [showSourcesPicker, setShowSourcesPicker] = useState(false);
+  const [selectedScope, setSelectedScope] = useState<"lesson" | "course" | "platform" | null>(null);
   const [policyInfo, setPolicyInfo] = useState<{ mode?: string; policyApplied?: ThreadMessage["policyApplied"] } | null>(
     null,
   );
@@ -118,6 +144,84 @@ export const AssistantPanel = () => {
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const canAsk = !!user && !loading;
+  const scopeContext = useMemo(() => {
+    const path = pathname || "";
+    const lessonMatch = path.match(/^\/learn\/([^/]+)\/lesson\/([^/]+)/);
+    const learnCourseMatch = path.match(/^\/learn\/([^/]+)/);
+    const courseMatch = path.match(/^\/courses\/([^/]+)/);
+    const parsedCourseId =
+      lessonMatch?.[1] ||
+      learnCourseMatch?.[1] ||
+      courseMatch?.[1] ||
+      (params?.courseId ? String(params.courseId) : "");
+    const parsedLessonId = lessonMatch?.[2] || (params?.lessonId ? String(params.lessonId) : "");
+    const scope = lessonMatch ? "lesson" : learnCourseMatch || courseMatch ? "course" : "platform";
+    return { scope, courseId: parsedCourseId, lessonId: parsedLessonId };
+  }, [pathname, params?.courseId, params?.lessonId]);
+  const effectiveScope = selectedScope || scopeContext.scope;
+  const groundedMode = selectedSources.length > 0;
+
+  useEffect(() => {
+    if (!open) return;
+    if (effectiveScope !== "lesson" || !scopeContext.lessonId) {
+      setAvailableSources([]);
+      setSelectedSources([]);
+      return;
+    }
+    let active = true;
+    fetchLesson(scopeContext.lessonId)
+      .then((lesson) => {
+        if (!active) return;
+        const nextSources: SourceOption[] = [];
+        const pushPdf = (id: string, title: string) => {
+          if (!id) return;
+          if (nextSources.find((item) => item.id === id)) return;
+          nextSources.push({ id, type: "pdf", title });
+        };
+        const pushYoutube = (id: string, title: string) => {
+          if (!id) return;
+          if (nextSources.find((item) => item.id === id)) return;
+          nextSources.push({ id, type: "youtube", title });
+        };
+        lesson?.attachments?.forEach((att) => {
+          const id = att.url || att.name;
+          const name = att.name || "PDF";
+          if (name.toLowerCase().endsWith(".pdf") || (att.url || "").toLowerCase().includes(".pdf")) {
+            pushPdf(id, name);
+          }
+        });
+        lesson?.resources?.forEach((res) => {
+          const id = res.id || res.storagePath || res.downloadUrl || res.url || res.name;
+          if (res.kind === "file") {
+            const name = res.name || "PDF";
+            const url = res.downloadUrl || res.url || "";
+            if (res.contentType?.includes("pdf") || name.toLowerCase().endsWith(".pdf") || url.toLowerCase().includes(".pdf")) {
+              pushPdf(id, name);
+            }
+          }
+          if (res.kind === "youtube" && res.text) {
+            pushYoutube(id, res.name || "YouTube transcript");
+          }
+        });
+        setAvailableSources(nextSources);
+        setSelectedSources((prev) => prev.filter((sel) => nextSources.some((src) => src.id === sel.id)));
+      })
+      .catch(() => {
+        if (!active) return;
+        setAvailableSources([]);
+        setSelectedSources([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [open, effectiveScope, scopeContext.lessonId]);
+
+  useEffect(() => {
+    if (!selectedScope) return;
+    if (selectedScope === "lesson" && !scopeContext.lessonId) {
+      setSelectedScope(null);
+    }
+  }, [selectedScope, scopeContext.lessonId]);
 
   const fetchWithAuth = useCallback(
     async (url: string, init?: RequestInit, retry = true) => {
@@ -151,12 +255,17 @@ export const AssistantPanel = () => {
     if (!user || threadsLoadingRef.current) return;
     threadsLoadingRef.current = true;
     const qs = new URLSearchParams();
-    if (params?.courseId) qs.set("courseId", String(params.courseId));
-    if (params?.lessonId) qs.set("lessonId", String(params.lessonId));
+    qs.set("scope", effectiveScope);
+    if (effectiveScope === "lesson") {
+      if (scopeContext.courseId) qs.set("courseId", scopeContext.courseId);
+      if (scopeContext.lessonId) qs.set("lessonId", scopeContext.lessonId);
+    } else if (effectiveScope === "course") {
+      if (scopeContext.courseId) qs.set("courseId", scopeContext.courseId);
+    }
     try {
       const res = await fetchWithAuth(`/api/ai/threads?${qs.toString()}`);
       const payload = await res.json().catch(() => ({}));
-      if (res.ok && !payload?.ok) {
+      if (res.ok && payload?.ok !== false) {
         setThreads(payload.threads || []);
         if (!activeThreadId && payload.threads?.[0]?.id) {
           setActiveThreadId(payload.threads[0].id);
@@ -167,7 +276,7 @@ export const AssistantPanel = () => {
     } finally {
       threadsLoadingRef.current = false;
     }
-  }, [user, params?.courseId, params?.lessonId, activeThreadId, fetchWithAuth, t]);
+  }, [user, scopeContext.courseId, scopeContext.lessonId, effectiveScope, activeThreadId, fetchWithAuth, t]);
 
   const loadThread = useCallback(
     async (threadId: string) => {
@@ -176,9 +285,14 @@ export const AssistantPanel = () => {
       try {
         const res = await fetchWithAuth(`/api/ai/threads/${threadId}`);
         const payload = await res.json().catch(() => ({}));
-        if (res.ok && !payload?.ok) {
+        if (res.ok && payload?.ok !== false) {
           const msgs = payload.messages || [];
-          setThreadMessages(msgs);
+          setThreadMessages((prev) => {
+            const map = new Map<string, ThreadMessage>();
+            prev.forEach((msg) => map.set(msg.id || `${msg.role}:${msg.content}`, msg));
+            msgs.forEach((msg: ThreadMessage) => map.set(msg.id || `${msg.role}:${msg.content}`, msg));
+            return Array.from(map.values());
+          });
           const latest = [...msgs].reverse().find((msg: ThreadMessage) => msg.role === "assistant" && (msg.mode || msg.policyApplied));
           if (latest) {
             setPolicyInfo({ mode: latest.mode, policyApplied: latest.policyApplied });
@@ -211,6 +325,14 @@ export const AssistantPanel = () => {
   }, [open, user, loadThreads]);
 
   useEffect(() => {
+    if (!open) return;
+    setActiveThreadId(null);
+    setThreadMessages([]);
+    setMessages([]);
+    setNewThreadNext(false);
+  }, [effectiveScope, open]);
+
+  useEffect(() => {
     if (!activeThreadId || !user) {
       setThreadMessages([]);
       setPolicyInfo(null);
@@ -228,10 +350,11 @@ export const AssistantPanel = () => {
     }
     setError(null);
     const question = input.trim();
+    const localCreatedAt = new Date();
     const clientRequestId = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}_${Math.random().toString(36).slice(2)}`;
     setInput("");
     if (activeThreadId) {
-      upsertThreadMessage({ id: `u_${clientRequestId}`, role: "user", content: question });
+      upsertThreadMessage({ id: `u_${clientRequestId}`, role: "user", content: question, createdAt: localCreatedAt });
     } else {
       setMessages((prev) => [...prev, { role: "user", text: question }]);
     }
@@ -247,12 +370,14 @@ export const AssistantPanel = () => {
         },
         body: JSON.stringify({
           message: question,
-          courseId: params?.courseId ?? null,
-          lessonId: params?.lessonId ?? null,
+          courseId: effectiveScope === "lesson" || effectiveScope === "course" ? scopeContext.courseId || null : null,
+          lessonId: effectiveScope === "lesson" ? scopeContext.lessonId || null : null,
           threadId: activeThreadId,
           newThread: newThreadNext,
           path: pathname,
           clientRequestId,
+          scope: effectiveScope,
+          selectedSources: groundedMode ? selectedSources : [],
         }),
       });
       const payload = await res.json();
@@ -262,13 +387,21 @@ export const AssistantPanel = () => {
         }
         throw new Error(payload?.error || t("ai.genericError"));
       }
-      const answerText = typeof payload?.answer === "string" ? payload.answer : payload.replyText;
+      const answerText =
+        typeof payload?.answerMarkdown === "string"
+          ? payload.answerMarkdown
+          : typeof payload?.answer === "string"
+            ? payload.answer
+            : payload.replyText;
       if (activeThreadId) {
         upsertThreadMessage({
           id: `a_${clientRequestId}`,
           role: "assistant",
           content: answerText,
+          createdAt: localCreatedAt,
           sources: payload.sources,
+          sourcesSummary: payload.sourcesSummary,
+          references: payload.references,
           citations: payload.citations,
           citationMeta: payload.citationMeta,
           mode: payload.mode,
@@ -281,6 +414,8 @@ export const AssistantPanel = () => {
             role: "assistant",
             text: answerText,
             sources: payload.sources,
+            sourcesSummary: payload.sourcesSummary,
+            references: payload.references,
             citations: payload.citations,
             citationMeta: payload.citationMeta,
             mode: payload.mode,
@@ -378,12 +513,19 @@ export const AssistantPanel = () => {
 
   const renderMeta = (
     sources?: SourceEntry[] | string[],
+    sourcesSummary?: string,
+    references?: ReferenceEntry[],
     citations?: string[],
     messageKey?: string,
     answerText?: string,
     citationMeta?: ThreadMessage["citationMeta"],
   ) => {
-    if ((!sources || sources.length === 0) && (!citations || citations.length === 0) && !citationMeta?.length) {
+    if (
+      (!sources || sources.length === 0) &&
+      (!citations || citations.length === 0) &&
+      !citationMeta?.length &&
+      !sourcesSummary
+    ) {
       return null;
     }
 
@@ -477,7 +619,22 @@ export const AssistantPanel = () => {
     });
 
     const showCitations = messageKey ? !!expandedCitations[messageKey] : false;
-    const referencesCount = citations?.length || 0;
+    const fallbackRefs =
+      references && references.length
+        ? references.map((ref) => `${ref.title} — ${ref.label}`)
+        : (citations || []).map((id) => {
+            const [resourceId, chunkRaw] = id.split("#");
+            const name = nameByResource.get(resourceId) || "PDF";
+            const numeric = Number(chunkRaw);
+            const display = Number.isFinite(numeric) ? String(numeric) : chunkRaw ?? "";
+            return `${name} — excerpt ${display}`.trim();
+          });
+    const referencesCount = fallbackRefs.length;
+    const summaryText = sourcesSummary?.trim()
+      ? sourcesSummary.trim()
+      : summaryParts.length
+        ? `${t("ai.sources")}: ${summaryParts.join("; ")}`
+        : "";
     const formatCitationLabel = (id: string) => {
       const [resourceId, chunkRaw] = id.split("#");
       const name = nameByResource.get(resourceId) || "PDF";
@@ -488,10 +645,9 @@ export const AssistantPanel = () => {
 
     return (
       <div className="mt-2 space-y-2 text-[11px] text-neutral-500">
-        {summaryParts.length ? (
+        {summaryText ? (
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-semibold">{t("ai.sources")}:</span>
-            <span>{summaryParts.join("; ")}</span>
+            <span>{summaryText}</span>
           </div>
         ) : null}
         <div className="flex flex-wrap items-center gap-2">
@@ -520,22 +676,14 @@ export const AssistantPanel = () => {
             </button>
           ) : null}
         </div>
-        {showCitations && citations?.length ? (
+        {showCitations && referencesCount > 0 ? (
           <div className="flex flex-wrap items-center gap-1">
-            {citations.map((id) => (
+            {fallbackRefs.map((label) => (
               <span
-                key={id}
-                role="button"
-                tabIndex={0}
-                onClick={() => openCitation(id, messageKey)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    openCitation(id, messageKey);
-                  }
-                }}
-                className="rounded bg-neutral-200 px-1.5 py-0.5 font-mono text-[10px] text-neutral-700 hover:bg-neutral-300"
+                key={label}
+                className="rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] text-neutral-700"
               >
-                {formatCitationLabel(id)}
+                {label}
               </span>
             ))}
           </div>
@@ -659,7 +807,53 @@ export const AssistantPanel = () => {
             {hintModeEnabled && (
               <span className="text-[10px] font-semibold text-amber-600">{t("ai.hintMode")}</span>
             )}
+            <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-neutral-600">
+              {groundedMode ? t("ai.modeGrounded") : t("ai.modeGeneral")}
+            </span>
           </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+            {(["lesson", "course", "platform"] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                  effectiveScope === option
+                    ? "bg-blue-600 text-white"
+                    : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
+                }`}
+                onClick={() => setSelectedScope(option)}
+              >
+                {option === "platform" ? t("ai.modePlatform") : option === "course" ? t("ai.modeCourse") : t("ai.modeLesson")}
+              </button>
+            ))}
+            {effectiveScope === "lesson" && (
+              <button
+                type="button"
+                className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold text-neutral-700 hover:bg-neutral-200"
+                onClick={() => setShowSourcesPicker(true)}
+              >
+                {t("ai.addSources")}
+              </button>
+            )}
+          </div>
+          {effectiveScope === "lesson" && (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-neutral-500">
+              {selectedSources.length === 0 ? (
+                <span>{t("ai.noSourcesSelected")}</span>
+              ) : (
+                selectedSources.map((source) => (
+                  <button
+                    key={source.id}
+                    type="button"
+                    className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] text-neutral-700"
+                    onClick={() => setSelectedSources((prev) => prev.filter((item) => item.id !== source.id))}
+                  >
+                    {source.title} ×
+                  </button>
+                ))
+              )}
+            </div>
+          )}
         </div>
         <Button size="sm" variant="ghost" onClick={close}>
           {t("ai.close")}
@@ -724,8 +918,21 @@ export const AssistantPanel = () => {
               msg.role === "user" ? "ml-auto bg-blue-600 text-white" : "mr-auto bg-neutral-100 text-neutral-700"
             }`}
           >
-            <p>{msg.content}</p>
-            {msg.role === "assistant" && renderMeta(msg.sources, msg.citations, messageKey, msg.content, msg.citationMeta)}
+            {msg.role === "assistant" ? (
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+            ) : (
+              <p>{msg.content}</p>
+            )}
+            {msg.role === "assistant" &&
+              renderMeta(
+                msg.sources,
+                msg.sourcesSummary,
+                msg.references,
+                msg.citations,
+                messageKey,
+                msg.content,
+                msg.citationMeta,
+              )}
             {msg.role === "assistant" && showPreview && (
               <div className="mt-2 hidden rounded-lg border border-neutral-200 bg-white p-2 text-[11px] text-neutral-700 sm:block">
                 <div className="mb-1 flex items-center justify-between text-[10px] uppercase text-neutral-500">
@@ -755,9 +962,21 @@ export const AssistantPanel = () => {
               msg.role === "user" ? "ml-auto bg-blue-600 text-white" : "mr-auto bg-neutral-100 text-neutral-700"
             }`}
           >
-            <p>{msg.text}</p>
+            {msg.role === "assistant" ? (
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.text}</ReactMarkdown>
+            ) : (
+              <p>{msg.text}</p>
+            )}
             {msg.role === "assistant" &&
-              renderMeta(msg.sources, msg.citations, `local-${idx}`, msg.text, msg.citationMeta)}
+              renderMeta(
+                msg.sources,
+                msg.sourcesSummary,
+                msg.references,
+                msg.citations,
+                `local-${idx}`,
+                msg.text,
+                msg.citationMeta,
+              )}
             {msg.role === "assistant" &&
               citationPreview &&
               citationPreview.messageKey === `local-${idx}` &&
@@ -841,6 +1060,50 @@ export const AssistantPanel = () => {
             {body}
           </div>
           <div className="fixed right-6 top-24 z-40 hidden h-[70vh] w-[360px] sm:block">{body}</div>
+          {showSourcesPicker && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+              <div className="w-full max-w-md rounded-xl bg-white p-4 shadow-lg">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-sm font-semibold">{t("ai.addSources")}</p>
+                  <button
+                    type="button"
+                    className="text-xs font-semibold text-blue-600"
+                    onClick={() => setShowSourcesPicker(false)}
+                  >
+                    {t("ai.close")}
+                  </button>
+                </div>
+                {availableSources.length === 0 ? (
+                  <p className="text-sm text-neutral-600">{t("ai.noSourcesAvailable")}</p>
+                ) : (
+                  <div className="space-y-2">
+                    {availableSources.map((source) => {
+                      const checked = selectedSources.some((item) => item.id === source.id);
+                      return (
+                        <label key={source.id} className="flex items-center gap-2 text-sm text-neutral-700">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() =>
+                              setSelectedSources((prev) =>
+                                checked ? prev.filter((item) => item.id !== source.id) : [...prev, source],
+                              )
+                            }
+                          />
+                          <span>{source.title}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="mt-4 flex justify-end">
+                  <Button size="sm" onClick={() => setShowSourcesPicker(false)}>
+                    {t("ai.done")}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
     </>
