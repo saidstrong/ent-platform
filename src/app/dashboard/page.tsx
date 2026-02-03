@@ -65,7 +65,7 @@ export default function DashboardPage() {
       <div className="mx-auto max-w-5xl px-4 py-10">
         <div className="mb-4">
           <h1 className="text-3xl font-semibold">{t("nav.myCourses")}</h1>
-          <p className="text-sm text-neutral-600">{t("dashboard.subtitle")}</p>
+          <p className="text-sm text-[var(--muted)]">{t("dashboard.subtitle")}</p>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           {items.map((item) => (
@@ -80,7 +80,7 @@ export default function DashboardPage() {
                   {item.status}
                 </span>
               </div>
-              <p className="text-sm text-neutral-600">{item.course ? pickLang(item.course.description_kz, item.course.description_en, lang) : ""}</p>
+              <p className="text-sm text-[var(--muted)]">{item.course ? pickLang(item.course.description_kz, item.course.description_en, lang) : ""}</p>
               <div className="flex items-center gap-2">
                 <Link href={`/courses/${item.courseId}`}>
                   <Button size="sm" variant="secondary">
@@ -112,7 +112,7 @@ export default function DashboardPage() {
               </div>
             </Card>
           ))}
-          {items.length === 0 && <p className="text-sm text-neutral-600">{t("dashboard.empty")}</p>}
+          {items.length === 0 && <p className="text-sm text-[var(--muted)]">{t("dashboard.empty")}</p>}
         </div>
       </div>
     </RequireAuth>

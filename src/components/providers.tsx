@@ -1,5 +1,6 @@
 'use client';
 
+import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "../lib/auth-context";
 import { I18nProvider } from "../lib/i18n";
 import { AssistantPanel, AssistantProvider } from "./ai-assistant";
@@ -9,16 +10,18 @@ import type { Language } from "../lib/types";
 
 export const Providers = ({ children, initialLang }: { children: React.ReactNode; initialLang: Language }) => {
   return (
-    <I18nProvider initialLang={initialLang}>
-      <AuthProvider>
-        <AssistantProvider>
-          {children}
-          <AssistantPanel />
-          <AssistantFab />
-          {process.env.NODE_ENV !== "production" && <DevListenerOverlay />}
-        </AssistantProvider>
-      </AuthProvider>
-    </I18nProvider>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <I18nProvider initialLang={initialLang}>
+        <AuthProvider>
+          <AssistantProvider>
+            {children}
+            <AssistantPanel />
+            <AssistantFab />
+            {process.env.NODE_ENV !== "production" && <DevListenerOverlay />}
+          </AssistantProvider>
+        </AuthProvider>
+      </I18nProvider>
+    </ThemeProvider>
   );
 };
 

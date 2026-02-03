@@ -7,7 +7,7 @@ export const Textarea = ({ className, ...rest }: Props) => {
   return (
     <textarea
       className={clsx(
-        "w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm outline-none ring-2 ring-transparent focus:ring-blue-200",
+        "w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text)] outline-none ring-2 ring-transparent focus:ring-[var(--accent)]",
         className,
       )}
       {...rest}

@@ -83,9 +83,9 @@ export default function AdminSubmissionsPage() {
       <Card className="space-y-3">
         <div className="grid gap-3 md:grid-cols-3">
           <div className="space-y-1">
-            <label className="text-xs font-semibold uppercase text-neutral-500">Course</label>
+            <label className="text-xs font-semibold uppercase text-[var(--muted)]">Course</label>
             <select
-              className="w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm"
+              className="w-full rounded-md border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm"
               value={courseFilter}
               onChange={(e) => setCourseFilter(e.target.value)}
             >
@@ -98,11 +98,11 @@ export default function AdminSubmissionsPage() {
             </select>
           </div>
           <div className="space-y-1">
-            <label className="text-xs font-semibold uppercase text-neutral-500">Assignment ID</label>
+            <label className="text-xs font-semibold uppercase text-[var(--muted)]">Assignment ID</label>
             <Input value={assignmentFilter} onChange={(e) => setAssignmentFilter(e.target.value)} placeholder="Search assignment id" />
           </div>
           <div className="space-y-1">
-            <label className="text-xs font-semibold uppercase text-neutral-500">Student UID</label>
+            <label className="text-xs font-semibold uppercase text-[var(--muted)]">Student UID</label>
             <Input value={uidFilter} onChange={(e) => setUidFilter(e.target.value)} placeholder="Search uid" />
           </div>
         </div>
@@ -113,19 +113,19 @@ export default function AdminSubmissionsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold">{s.assignment?.title_en || s.assignmentId}</p>
-                <p className="text-xs text-neutral-500">{s.uid}</p>
+                <p className="text-xs text-[var(--muted)]">{s.uid}</p>
               </div>
-              <span className="text-xs text-neutral-500">{formatAnyTimestamp(s.submittedAt)}</span>
+              <span className="text-xs text-[var(--muted)]">{formatAnyTimestamp(s.submittedAt)}</span>
             </div>
-            {s.textAnswer && <p className="text-sm text-neutral-700">Answer: {s.textAnswer}</p>}
+            {s.textAnswer && <p className="text-sm text-[var(--text)]">Answer: {s.textAnswer}</p>}
             {s.fileUrl && (
               <div className="space-y-1 text-sm">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs text-neutral-600">{filenameFromUrl(s.fileUrl, s.fileName)}</span>
-                  <a className="text-blue-700" href={s.fileUrl} target="_blank" rel="noreferrer">
+                  <span className="text-xs text-[var(--muted)]">{filenameFromUrl(s.fileUrl, s.fileName)}</span>
+                  <a className="text-[var(--text)]" href={s.fileUrl} target="_blank" rel="noreferrer">
                     Open
                   </a>
-                  <a className="text-blue-700" href={s.fileUrl} target="_blank" rel="noreferrer" download>
+                  <a className="text-[var(--text)]" href={s.fileUrl} target="_blank" rel="noreferrer" download>
                     Download
                   </a>
                 </div>
@@ -138,7 +138,7 @@ export default function AdminSubmissionsPage() {
                   <img src={s.fileUrl} alt="Submission attachment" className="max-h-32 rounded-md object-contain" />
                 )}
                 {(s.contentType === "application/pdf" || s.fileUrl.endsWith(".pdf")) && (
-                  <a className="text-blue-700" href={s.fileUrl} target="_blank" rel="noreferrer">
+                  <a className="text-[var(--text)]" href={s.fileUrl} target="_blank" rel="noreferrer">
                     Open PDF
                   </a>
                 )}
@@ -181,7 +181,7 @@ export default function AdminSubmissionsPage() {
             </div>
           </Card>
         ))}
-        {filteredSubmissions.length === 0 && <p className="text-sm text-neutral-600">No submissions yet.</p>}
+        {filteredSubmissions.length === 0 && <p className="text-sm text-[var(--muted)]">No submissions yet.</p>}
       </div>
     </div>
   );

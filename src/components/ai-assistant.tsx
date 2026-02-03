@@ -644,7 +644,7 @@ export const AssistantPanel = () => {
     };
 
     return (
-      <div className="mt-2 space-y-2 text-[11px] text-neutral-500">
+      <div className="mt-2 space-y-2 text-[11px] text-[var(--muted)]">
         {summaryText ? (
           <div className="flex flex-wrap items-center gap-2">
             <span>{summaryText}</span>
@@ -654,7 +654,7 @@ export const AssistantPanel = () => {
           {answerText ? (
             <button
               type="button"
-              className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-blue-600 hover:text-blue-700"
+              className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-[var(--text)] hover:opacity-80"
               onClick={() => {
                 if (typeof navigator === "undefined" || !navigator.clipboard) return;
                 navigator.clipboard.writeText(answerText).catch(() => null);
@@ -666,7 +666,7 @@ export const AssistantPanel = () => {
           {referencesCount > 0 ? (
             <button
               type="button"
-              className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-blue-600 hover:text-blue-700"
+              className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-[var(--text)] hover:opacity-80"
               onClick={() => {
                 if (!messageKey) return;
                 setExpandedCitations((prev) => ({ ...prev, [messageKey]: !prev[messageKey] }));
@@ -681,7 +681,7 @@ export const AssistantPanel = () => {
             {fallbackRefs.map((label) => (
               <span
                 key={label}
-                className="rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] text-neutral-700"
+                className="rounded border border-[var(--border)] bg-[var(--card)] px-1.5 py-0.5 text-[10px] text-[var(--text)]"
               >
                 {label}
               </span>
@@ -796,18 +796,18 @@ export const AssistantPanel = () => {
 
   const body = (
     <Card className="flex h-full flex-col gap-3 overflow-hidden">
-      <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3">
+      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border)] bg-[var(--surface)]/95 px-4 py-3 backdrop-blur">
         <div>
-          <p className="text-sm font-semibold text-neutral-800">{t("ai.title")}</p>
-          <p className="text-xs text-neutral-500">{t("ai.subtitle")}</p>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-neutral-500">
-            <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-neutral-600">
+          <p className="text-sm font-semibold text-[var(--text)]">{t("ai.title")}</p>
+          <p className="text-xs text-[var(--muted)]">{t("ai.subtitle")}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-[var(--muted)]">
+            <span className="rounded-full border border-[var(--border)] bg-[var(--card)] px-2 py-0.5 text-[10px] font-semibold uppercase text-[var(--text)]">
               {modeLabel(effectiveMode)}
             </span>
             {hintModeEnabled && (
-              <span className="text-[10px] font-semibold text-amber-600">{t("ai.hintMode")}</span>
+              <span className="text-[10px] font-semibold text-[var(--muted)]">{t("ai.hintMode")}</span>
             )}
-            <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-neutral-600">
+            <span className="rounded-full border border-[var(--border)] bg-[var(--card)] px-2 py-0.5 text-[10px] font-semibold uppercase text-[var(--text)]">
               {groundedMode ? t("ai.modeGrounded") : t("ai.modeGeneral")}
             </span>
           </div>
@@ -816,10 +816,10 @@ export const AssistantPanel = () => {
               <button
                 key={option}
                 type="button"
-                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                className={`rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] font-semibold ${
                   effectiveScope === option
-                    ? "bg-blue-600 text-white"
-                    : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
+                    ? "bg-[var(--accent)] text-[var(--bg)]"
+                    : "bg-[var(--card)] text-[var(--text)] hover:bg-[var(--surface)]"
                 }`}
                 onClick={() => setSelectedScope(option)}
               >
@@ -829,7 +829,7 @@ export const AssistantPanel = () => {
             {effectiveScope === "lesson" && (
               <button
                 type="button"
-                className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold text-neutral-700 hover:bg-neutral-200"
+                className="rounded-full border border-[var(--border)] bg-[var(--card)] px-2 py-0.5 text-[10px] font-semibold text-[var(--text)] hover:bg-[var(--surface)]"
                 onClick={() => setShowSourcesPicker(true)}
               >
                 {t("ai.addSources")}
@@ -837,7 +837,7 @@ export const AssistantPanel = () => {
             )}
           </div>
           {effectiveScope === "lesson" && (
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-neutral-500">
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[var(--muted)]">
               {selectedSources.length === 0 ? (
                 <span>{t("ai.noSourcesSelected")}</span>
               ) : (
@@ -845,7 +845,7 @@ export const AssistantPanel = () => {
                   <button
                     key={source.id}
                     type="button"
-                    className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] text-neutral-700"
+                    className="rounded-full border border-[var(--border)] bg-[var(--card)] px-2 py-0.5 text-[10px] text-[var(--text)]"
                     onClick={() => setSelectedSources((prev) => prev.filter((item) => item.id !== source.id))}
                   >
                     {source.title} ×
@@ -862,7 +862,7 @@ export const AssistantPanel = () => {
       <div className="flex-1 space-y-3 overflow-y-auto px-4 py-2">
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <p className="text-xs uppercase text-neutral-500">{t("ai.recent")}</p>
+            <p className="text-xs uppercase text-[var(--muted)]">{t("ai.recent")}</p>
             <Button
               size="sm"
               variant="secondary"
@@ -881,15 +881,15 @@ export const AssistantPanel = () => {
               <button
                 key={thread.id}
                 type="button"
-                className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                  thread.id === activeThreadId ? "bg-blue-600 text-white" : "bg-neutral-100 text-neutral-700"
+                className={`rounded-full border border-[var(--border)] px-3 py-1 text-xs font-semibold ${
+                  thread.id === activeThreadId ? "bg-[var(--accent)] text-[var(--bg)]" : "bg-[var(--card)] text-[var(--text)]"
                 }`}
                 onClick={() => setActiveThreadId(thread.id)}
               >
                 {thread.title || t("ai.threadTitle")}
               </button>
             ))}
-            {threads.length === 0 && <span className="text-xs text-neutral-500">{t("ai.noThreads")}</span>}
+            {threads.length === 0 && <span className="text-xs text-[var(--muted)]">{t("ai.noThreads")}</span>}
           </div>
           {activeThreadId && (
             <div className="flex items-center gap-2">
@@ -903,7 +903,7 @@ export const AssistantPanel = () => {
           )}
         </div>
         {(threadMessages.length === 0 && messages.length === 0) && (
-          <p className="text-sm text-neutral-600">{t("ai.empty")}</p>
+          <p className="text-sm text-[var(--muted)]">{t("ai.empty")}</p>
         )}
         {dedupedThreadMessages.map((msg) => {
           const messageKey = msg.id;
@@ -914,12 +914,16 @@ export const AssistantPanel = () => {
           return (
           <div
             key={msg.id}
-            className={`rounded-xl px-3 py-2 text-sm ${
-              msg.role === "user" ? "ml-auto bg-blue-600 text-white" : "mr-auto bg-neutral-100 text-neutral-700"
+            className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
+              msg.role === "user"
+                ? "ml-auto bg-[var(--accent)] text-[var(--bg)]"
+                : "mr-auto border border-[var(--border)] bg-[var(--card)] text-[var(--text)]"
             }`}
           >
             {msg.role === "assistant" ? (
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+              <div className="prose prose-sm max-w-none dark:prose-invert">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+              </div>
             ) : (
               <p>{msg.content}</p>
             )}
@@ -934,21 +938,21 @@ export const AssistantPanel = () => {
                 msg.citationMeta,
               )}
             {msg.role === "assistant" && showPreview && (
-              <div className="mt-2 hidden rounded-lg border border-neutral-200 bg-white p-2 text-[11px] text-neutral-700 sm:block">
-                <div className="mb-1 flex items-center justify-between text-[10px] uppercase text-neutral-500">
+              <div className="mt-2 hidden rounded-lg border border-[var(--border)] bg-[var(--surface)] p-2 text-[11px] text-[var(--text)] sm:block">
+                <div className="mb-1 flex items-center justify-between text-[10px] uppercase text-[var(--muted)]">
                   <span>{citationPreview.name || "PDF"}</span>
-                  <button type="button" className="text-blue-600" onClick={() => setCitationPreview(null)}>
+                  <button type="button" className="text-[var(--text)]" onClick={() => setCitationPreview(null)}>
                     {t("ai.close")}
                   </button>
                 </div>
                 {citationPreview.loading && <div>{t("ai.sending")}</div>}
-                {citationPreview.error && <div className="text-red-600">{citationPreview.error}</div>}
+                {citationPreview.error && <div className="text-[var(--muted)]">{citationPreview.error}</div>}
                 {citationPreview.snippet && <div>{citationPreview.snippet}</div>}
                 {citationPreview.pageLabel && (
-                  <div className="text-[10px] text-neutral-500">{citationPreview.pageLabel}</div>
+                  <div className="text-[10px] text-[var(--muted)]">{citationPreview.pageLabel}</div>
                 )}
                 {citationPreview.id && (
-                  <div className="mt-1 text-[10px] text-neutral-400">{formatExcerptLabel(citationPreview.id)}</div>
+                  <div className="mt-1 text-[10px] text-[var(--muted)]">{formatExcerptLabel(citationPreview.id)}</div>
                 )}
               </div>
             )}
@@ -958,12 +962,16 @@ export const AssistantPanel = () => {
         {(threadMessages.length === 0 && !activeThreadId) && messages.map((msg, idx) => (
           <div
             key={`${msg.role}-${idx}`}
-            className={`rounded-xl px-3 py-2 text-sm ${
-              msg.role === "user" ? "ml-auto bg-blue-600 text-white" : "mr-auto bg-neutral-100 text-neutral-700"
+            className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
+              msg.role === "user"
+                ? "ml-auto bg-[var(--accent)] text-[var(--bg)]"
+                : "mr-auto border border-[var(--border)] bg-[var(--card)] text-[var(--text)]"
             }`}
           >
             {msg.role === "assistant" ? (
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.text}</ReactMarkdown>
+              <div className="prose prose-sm max-w-none dark:prose-invert">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.text}</ReactMarkdown>
+              </div>
             ) : (
               <p>{msg.text}</p>
             )}
@@ -981,21 +989,21 @@ export const AssistantPanel = () => {
               citationPreview &&
               citationPreview.messageKey === `local-${idx}` &&
               msg.citations?.includes(citationPreview.id) && (
-                <div className="mt-2 hidden rounded-lg border border-neutral-200 bg-white p-2 text-[11px] text-neutral-700 sm:block">
-                  <div className="mb-1 flex items-center justify-between text-[10px] uppercase text-neutral-500">
+                <div className="mt-2 hidden rounded-lg border border-[var(--border)] bg-[var(--surface)] p-2 text-[11px] text-[var(--text)] sm:block">
+                  <div className="mb-1 flex items-center justify-between text-[10px] uppercase text-[var(--muted)]">
                     <span>{citationPreview.name || "PDF"}</span>
-                    <button type="button" className="text-blue-600" onClick={() => setCitationPreview(null)}>
+                    <button type="button" className="text-[var(--text)]" onClick={() => setCitationPreview(null)}>
                       {t("ai.close")}
                     </button>
                   </div>
                   {citationPreview.loading && <div>{t("ai.sending")}</div>}
-                  {citationPreview.error && <div className="text-red-600">{citationPreview.error}</div>}
+                  {citationPreview.error && <div className="text-[var(--muted)]">{citationPreview.error}</div>}
                   {citationPreview.snippet && <div>{citationPreview.snippet}</div>}
                   {citationPreview.pageLabel && (
-                    <div className="text-[10px] text-neutral-500">{citationPreview.pageLabel}</div>
+                    <div className="text-[10px] text-[var(--muted)]">{citationPreview.pageLabel}</div>
                   )}
                   {citationPreview.id && (
-                    <div className="mt-1 text-[10px] text-neutral-400">
+                    <div className="mt-1 text-[10px] text-[var(--muted)]">
                       {formatExcerptLabel(citationPreview.id)}
                     </div>
                   )}
@@ -1008,33 +1016,33 @@ export const AssistantPanel = () => {
       {citationPreview && (
         <>
           <div className="fixed inset-0 z-[55] bg-black/30 sm:hidden" onClick={() => setCitationPreview(null)} />
-          <div className="fixed inset-x-0 bottom-0 z-[60] rounded-t-2xl bg-white p-4 shadow-lg sm:hidden">
+          <div className="fixed inset-x-0 bottom-0 z-[60] rounded-t-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-lg sm:hidden">
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-semibold text-neutral-600">{citationPreview.name || "PDF"}</span>
-              <button type="button" className="text-sm font-semibold text-blue-600" onClick={() => setCitationPreview(null)}>
+              <span className="text-xs font-semibold text-[var(--muted)]">{citationPreview.name || "PDF"}</span>
+              <button type="button" className="text-sm font-semibold text-[var(--text)]" onClick={() => setCitationPreview(null)}>
                 {t("ai.close")}
               </button>
             </div>
-            {citationPreview.loading && <p className="text-xs text-neutral-500">{t("ai.sending")}</p>}
-            {citationPreview.error && <p className="text-xs text-red-600">{citationPreview.error}</p>}
-            {citationPreview.snippet && <p className="text-sm text-neutral-700">{citationPreview.snippet}</p>}
+            {citationPreview.loading && <p className="text-xs text-[var(--muted)]">{t("ai.sending")}</p>}
+            {citationPreview.error && <p className="text-xs text-[var(--muted)]">{citationPreview.error}</p>}
+            {citationPreview.snippet && <p className="text-sm text-[var(--text)]">{citationPreview.snippet}</p>}
             {citationPreview.pageLabel && (
-              <p className="text-[11px] text-neutral-500">{citationPreview.pageLabel}</p>
+              <p className="text-[11px] text-[var(--muted)]">{citationPreview.pageLabel}</p>
             )}
             {citationPreview.id && (
-              <p className="mt-2 text-[10px] text-neutral-400">{formatExcerptLabel(citationPreview.id)}</p>
+              <p className="mt-2 text-[10px] text-[var(--muted)]">{formatExcerptLabel(citationPreview.id)}</p>
             )}
           </div>
         </>
       )}
-      <div className="border-t border-neutral-200 px-4 py-3">
+      <div className="sticky bottom-0 border-t border-[var(--border)] bg-[var(--surface)]/95 px-4 py-3 backdrop-blur">
         {remaining && (
-          <p className="mb-2 text-xs text-neutral-500">
+          <p className="mb-2 text-xs text-[var(--muted)]">
             {t("ai.remaining")}: {formatRemaining(remaining)}
           </p>
         )}
-        {!canAsk && <p className="mb-2 text-xs text-neutral-500">{t("ai.signInRequired")}</p>}
-        {error && <p className="mb-2 text-xs text-red-600">{error}</p>}
+        {!canAsk && <p className="mb-2 text-xs text-[var(--muted)]">{t("ai.signInRequired")}</p>}
+        {error && <p className="mb-2 text-xs text-[var(--muted)]">{error}</p>}
         <div className="flex items-end gap-2">
           <Textarea
             rows={2}
@@ -1056,31 +1064,31 @@ export const AssistantPanel = () => {
       {open && (
         <>
           <div className="fixed inset-0 z-40 bg-black/30 sm:hidden" onClick={close} />
-          <div className="fixed inset-0 z-50 flex flex-col bg-white p-4 sm:hidden">
+          <div className="fixed inset-0 z-50 flex flex-col bg-[var(--bg)] p-4 sm:hidden">
             {body}
           </div>
           <div className="fixed right-6 top-24 z-40 hidden h-[70vh] w-[360px] sm:block">{body}</div>
           {showSourcesPicker && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
-              <div className="w-full max-w-md rounded-xl bg-white p-4 shadow-lg">
+              <div className="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-lg">
                 <div className="mb-3 flex items-center justify-between">
-                  <p className="text-sm font-semibold">{t("ai.addSources")}</p>
+                  <p className="text-sm font-semibold text-[var(--text)]">{t("ai.addSources")}</p>
                   <button
                     type="button"
-                    className="text-xs font-semibold text-blue-600"
+                    className="text-xs font-semibold text-[var(--text)]"
                     onClick={() => setShowSourcesPicker(false)}
                   >
                     {t("ai.close")}
                   </button>
                 </div>
                 {availableSources.length === 0 ? (
-                  <p className="text-sm text-neutral-600">{t("ai.noSourcesAvailable")}</p>
+                  <p className="text-sm text-[var(--muted)]">{t("ai.noSourcesAvailable")}</p>
                 ) : (
                   <div className="space-y-2">
                     {availableSources.map((source) => {
                       const checked = selectedSources.some((item) => item.id === source.id);
                       return (
-                        <label key={source.id} className="flex items-center gap-2 text-sm text-neutral-700">
+                        <label key={source.id} className="flex items-center gap-2 text-sm text-[var(--text)]">
                           <input
                             type="checkbox"
                             checked={checked}

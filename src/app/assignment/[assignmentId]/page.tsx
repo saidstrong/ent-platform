@@ -125,18 +125,18 @@ export default function AssignmentPage() {
   return (
     <RequireAuth>
       <div className="mx-auto max-w-3xl px-4 py-10">
-        <Link href="/dashboard" className="text-sm text-blue-700">
+        <Link href="/dashboard" className="text-sm text-[var(--text)]">
           ← {t("buttons.backToCourse")}
         </Link>
         <h1 className="mt-2 text-3xl font-semibold">{assignment ? pickLang(assignment.title_kz, assignment.title_en, lang) : t("assignment.title")}</h1>
-        {lesson && <p className="text-sm text-neutral-600">{pickLang(lesson.title_kz, lesson.title_en, lang)}</p>}
+        {lesson && <p className="text-sm text-[var(--muted)]">{pickLang(lesson.title_kz, lesson.title_en, lang)}</p>}
         <Card className="mt-4">
           <form className="space-y-4" onSubmit={submit}>
-            <p className="text-sm text-neutral-700">{assignment && pickLang(assignment.instructions_kz, assignment.instructions_en, lang)}</p>
+            <p className="text-sm text-[var(--text)]">{assignment && pickLang(assignment.instructions_kz, assignment.instructions_en, lang)}</p>
             {submission && (
-              <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm">
+              <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3 text-sm">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold uppercase text-neutral-500">{t("lesson.yourSubmission")}</p>
+                  <p className="text-xs font-semibold uppercase text-[var(--muted)]">{t("lesson.yourSubmission")}</p>
                   <span
                     className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
                       submission.checkedAt ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-800"
@@ -145,7 +145,7 @@ export default function AssignmentPage() {
                     {submission.checkedAt ? t("lesson.statusChecked") : t("lesson.statusPending")}
                   </span>
                 </div>
-                <div className="mt-2 space-y-1 text-neutral-700">
+                <div className="mt-2 space-y-1 text-[var(--text)]">
                   <p>
                     {t("lesson.submittedAt")}: {formatAnyTimestamp(submission.submittedAt)}
                   </p>
@@ -155,25 +155,25 @@ export default function AssignmentPage() {
                     </p>
                   )}
                   {submission.feedback && (
-                    <div className="rounded-md bg-white p-2 text-sm">
-                      <p className="text-[12px] font-semibold uppercase text-neutral-500">{t("lesson.feedback")}</p>
+                    <div className="rounded-md bg-[var(--card)] p-2 text-sm">
+                      <p className="text-[12px] font-semibold uppercase text-[var(--muted)]">{t("lesson.feedback")}</p>
                       <p>{submission.feedback}</p>
                     </div>
                   )}
                   {submission.checkedAt && (
-                    <p className="text-xs text-neutral-500">
+                    <p className="text-xs text-[var(--muted)]">
                       {t("lesson.checkedAt")}: {formatAnyTimestamp(submission.checkedAt)}
                     </p>
                   )}
                   {submission.fileUrl && (
                     <div className="space-y-1">
-                      <p className="text-[12px] font-semibold uppercase text-neutral-500">{t("assignment.attachFile")}</p>
+                      <p className="text-[12px] font-semibold uppercase text-[var(--muted)]">{t("assignment.attachFile")}</p>
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs text-neutral-600">{submission.fileName || filenameFromUrl(submission.fileUrl)}</span>
-                        <a className="text-blue-700" href={submission.fileUrl} target="_blank" rel="noreferrer">
+                        <span className="text-xs text-[var(--muted)]">{submission.fileName || filenameFromUrl(submission.fileUrl)}</span>
+                        <a className="text-[var(--text)]" href={submission.fileUrl} target="_blank" rel="noreferrer">
                           {t("assignment.openAttachment")}
                         </a>
-                        <a className="text-blue-700" href={submission.fileUrl} target="_blank" rel="noreferrer" download>
+                        <a className="text-[var(--text)]" href={submission.fileUrl} target="_blank" rel="noreferrer" download>
                           {t("assignment.downloadAttachment")}
                         </a>
                       </div>
@@ -186,7 +186,7 @@ export default function AssignmentPage() {
                         <img src={submission.fileUrl} alt="Submission attachment" className="max-h-40 rounded-md object-contain" />
                       )}
                       {(submission.contentType === "application/pdf" || submission.fileUrl.endsWith(".pdf")) && (
-                        <a className="text-blue-700" href={submission.fileUrl} target="_blank" rel="noreferrer">
+                        <a className="text-[var(--text)]" href={submission.fileUrl} target="_blank" rel="noreferrer">
                           {t("assignment.openAttachment")}
                         </a>
                       )}
@@ -194,7 +194,7 @@ export default function AssignmentPage() {
                   )}
                 </div>
                 {!allowResubmit && (
-                  <div className="mt-3 flex items-center justify-between rounded-md bg-white px-3 py-2 text-xs text-neutral-600">
+                  <div className="mt-3 flex items-center justify-between rounded-md bg-[var(--card)] px-3 py-2 text-xs text-[var(--muted)]">
                     <span>{t("assignment.allowResubmit")}</span>
                     <Button size="sm" variant="secondary" onClick={() => setAllowResubmit(true)}>
                       {t("buttons.resubmit")}
@@ -204,11 +204,11 @@ export default function AssignmentPage() {
               </div>
             )}
             <div>
-              <label className="text-sm font-semibold text-neutral-700">{t("assignment.textAnswer")}</label>
+              <label className="text-sm font-semibold text-[var(--text)]">{t("assignment.textAnswer")}</label>
               <Textarea rows={5} value={textAnswer} onChange={(e) => setTextAnswer(e.target.value)} placeholder={t("assignment.textAnswerPlaceholder")} />
             </div>
             <div>
-              <label className="text-sm font-semibold text-neutral-700">{t("assignment.attachFile")}</label>
+              <label className="text-sm font-semibold text-[var(--text)]">{t("assignment.attachFile")}</label>
               <Input
                 type="file"
                 accept="application/pdf,image/*,.docx"

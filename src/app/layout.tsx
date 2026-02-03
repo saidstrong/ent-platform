@@ -24,8 +24,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const initialLang: Language = langCookie === "en" || langCookie === "kz" ? langCookie : "kz";
 
   return (
-    <html lang="en">
-      <body className={`${manrope.variable} bg-slate-50 text-neutral-900 antialiased`}>
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${manrope.variable} bg-[var(--bg)] text-[var(--text)] antialiased`}>
         <Providers initialLang={initialLang}>
           <Navbar />
           <main className="min-h-screen">{children}</main>

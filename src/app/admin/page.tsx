@@ -15,9 +15,9 @@ export default function AdminHome() {
       {links.map((l) => (
         <Link key={l.href} href={l.href}>
           <Card className="h-full cursor-pointer transition hover:-translate-y-1 hover:shadow-md">
-            <p className="text-sm font-semibold text-blue-700">Admin</p>
+            <p className="text-sm font-semibold text-[var(--text)]">Admin</p>
             <h2 className="text-xl font-semibold">{l.label}</h2>
-            <p className="text-sm text-neutral-600">Manage {l.label.toLowerCase()}.</p>
+            <p className="text-sm text-[var(--muted)]">Manage {l.label.toLowerCase()}.</p>
           </Card>
         </Link>
       ))}

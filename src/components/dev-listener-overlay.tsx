@@ -35,9 +35,9 @@ export const DevListenerOverlay = () => {
   if (process.env.NODE_ENV === "production" || !lastError) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-[360px] rounded-lg border border-red-200 bg-white p-3 text-xs shadow-lg">
+    <div className="fixed bottom-4 right-4 z-50 w-[360px] rounded-lg border border-red-200 bg-[var(--card)] p-3 text-xs shadow-lg">
       <div className="mb-2 font-semibold text-red-700">Listener error</div>
-      <div className="space-y-1 text-neutral-700">
+      <div className="space-y-1 text-[var(--text)]">
         <div><span className="font-semibold">Tag:</span> {lastError.tag}</div>
         {lastError.desc && <div><span className="font-semibold">Desc:</span> {lastError.desc}</div>}
         {lastError.code && <div><span className="font-semibold">Code:</span> {lastError.code}</div>}
@@ -48,12 +48,12 @@ export const DevListenerOverlay = () => {
         {lastError.route && <div><span className="font-semibold">Route:</span> {lastError.route}</div>}
       </div>
       {lastError.constraints && lastError.constraints.length > 0 && (
-        <pre className="mt-2 max-h-32 overflow-auto rounded bg-neutral-50 p-2 text-[10px] text-neutral-600">
+        <pre className="mt-2 max-h-32 overflow-auto rounded bg-[var(--surface)] p-2 text-[10px] text-[var(--muted)]">
           {JSON.stringify(lastError.constraints, null, 2)}
         </pre>
       )}
       {lastError.stack && (
-        <pre className="mt-2 max-h-32 overflow-auto rounded bg-neutral-50 p-2 text-[10px] text-neutral-600">
+        <pre className="mt-2 max-h-32 overflow-auto rounded bg-[var(--surface)] p-2 text-[10px] text-[var(--muted)]">
           {trimStack(lastError.stack)}
         </pre>
       )}

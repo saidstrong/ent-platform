@@ -82,23 +82,23 @@ export default function AdminCoursesPage() {
         <h2 className="mb-4 text-lg font-semibold">Create / update course</h2>
         <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
           <div>
-            <label className="text-sm font-semibold text-neutral-700">Title (KZ)</label>
+            <label className="text-sm font-semibold text-[var(--text)]">Title (KZ)</label>
             <Input value={form.title_kz} onChange={(e) => setForm({ ...form, title_kz: e.target.value })} required />
           </div>
           <div>
-            <label className="text-sm font-semibold text-neutral-700">Title (EN)</label>
+            <label className="text-sm font-semibold text-[var(--text)]">Title (EN)</label>
             <Input value={form.title_en} onChange={(e) => setForm({ ...form, title_en: e.target.value })} required />
           </div>
           <div>
-            <label className="text-sm font-semibold text-neutral-700">Description (KZ)</label>
+            <label className="text-sm font-semibold text-[var(--text)]">Description (KZ)</label>
             <Textarea rows={3} value={form.description_kz} onChange={(e) => setForm({ ...form, description_kz: e.target.value })} required />
           </div>
           <div>
-            <label className="text-sm font-semibold text-neutral-700">Description (EN)</label>
+            <label className="text-sm font-semibold text-[var(--text)]">Description (EN)</label>
             <Textarea rows={3} value={form.description_en} onChange={(e) => setForm({ ...form, description_en: e.target.value })} required />
           </div>
           <div>
-            <label className="text-sm font-semibold text-neutral-700">Level</label>
+            <label className="text-sm font-semibold text-[var(--text)]">Level</label>
             <Select value={form.level} onChange={(e) => setForm({ ...form, level: e.target.value as CourseLevel })}>
               <option value="beginner">beginner</option>
               <option value="intermediate">intermediate</option>
@@ -106,15 +106,15 @@ export default function AdminCoursesPage() {
             </Select>
           </div>
           <div>
-            <label className="text-sm font-semibold text-neutral-700">Duration (weeks)</label>
+            <label className="text-sm font-semibold text-[var(--text)]">Duration (weeks)</label>
             <Input type="number" value={form.durationWeeks} onChange={(e) => setForm({ ...form, durationWeeks: Number(e.target.value) })} />
           </div>
           <div>
-            <label className="text-sm font-semibold text-neutral-700">Price (KZT)</label>
+            <label className="text-sm font-semibold text-[var(--text)]">Price (KZT)</label>
             <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} />
           </div>
           <div>
-            <label className="text-sm font-semibold text-neutral-700">Tags (comma)</label>
+            <label className="text-sm font-semibold text-[var(--text)]">Tags (comma)</label>
             <Input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} />
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
@@ -131,11 +131,11 @@ export default function AdminCoursesPage() {
           <Card key={course.id} className="space-y-2">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">{course.title_en}</h3>
-              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${course.published ? "bg-green-50 text-green-700" : "bg-neutral-100 text-neutral-600"}`}>
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${course.published ? "bg-green-50 text-green-700" : "bg-[var(--surface)] text-[var(--muted)]"}`}>
                 {course.published ? "Published" : "Draft"}
               </span>
             </div>
-            <p className="text-sm text-neutral-600">{course.description_en}</p>
+            <p className="text-sm text-[var(--muted)]">{course.description_en}</p>
             <div className="flex items-center gap-2">
               <Button size="sm" variant="secondary" onClick={() => togglePublish(course)}>
                 {course.published ? "Unpublish" : "Publish"}
@@ -146,7 +146,7 @@ export default function AdminCoursesPage() {
             </div>
           </Card>
         ))}
-        {courses.length === 0 && <p className="text-sm text-neutral-600">No courses yet.</p>}
+        {courses.length === 0 && <p className="text-sm text-[var(--muted)]">No courses yet.</p>}
       </div>
     </div>
   );

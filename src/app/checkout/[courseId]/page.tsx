@@ -170,15 +170,15 @@ export default function CheckoutPage() {
   return (
     <RequireAuth>
       <div className="mx-auto max-w-3xl px-4 py-10">
-        <Link href={`/courses/${params.courseId}`} className="text-sm text-blue-700">
+        <Link href={`/courses/${params.courseId}`} className="text-sm text-[var(--text)]">
           &lt; {t("buttons.backToCourse")}
         </Link>
         <h1 className="mt-2 text-3xl font-semibold">{t("checkout.manualPayment")}</h1>
-        {course && <p className="text-sm text-neutral-600">{pickLang(course.title_kz, course.title_en, lang)}</p>}
+        {course && <p className="text-sm text-[var(--muted)]">{pickLang(course.title_kz, course.title_en, lang)}</p>}
         <Card className="mt-4 space-y-4">
           <div>
-            <p className="text-sm font-semibold text-neutral-700">{t("checkout.instructionsTitle")}</p>
-            <p className="text-sm text-neutral-600">
+            <p className="text-sm font-semibold text-[var(--text)]">{t("checkout.instructionsTitle")}</p>
+            <p className="text-sm text-[var(--muted)]">
               {t("checkout.instructionsBody")
                 .replace("{number}", "4400 4302 8060 1375")
                 .replace("{comment}", `ENT ${course?.id ?? ""}`)}
@@ -186,15 +186,15 @@ export default function CheckoutPage() {
           </div>
           <form className="space-y-4" onSubmit={submit}>
             <div>
-              <label className="text-sm font-semibold text-neutral-700">{t("checkout.amount")}</label>
+              <label className="text-sm font-semibold text-[var(--text)]">{t("checkout.amount")}</label>
               <Input value={course ? `${course.price} ${course.currency}` : ""} disabled />
             </div>
             <div>
-              <label className="text-sm font-semibold text-neutral-700">{t("checkout.proofLabel")}</label>
+              <label className="text-sm font-semibold text-[var(--text)]">{t("checkout.proofLabel")}</label>
               <Textarea value={proofText} onChange={(e) => setProofText(e.target.value)} placeholder={t("checkout.proofPlaceholder")} required />
             </div>
             <div>
-              <label className="text-sm font-semibold text-neutral-700">{t("checkout.attachScreenshot")}</label>
+              <label className="text-sm font-semibold text-[var(--text)]">{t("checkout.attachScreenshot")}</label>
               <Input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
             </div>
             {error && (
