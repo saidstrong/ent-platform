@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import admin from "firebase-admin";
 import { getAdminServicesSafe } from "../../../../lib/firebase-admin";
-import { extractPdfTextFromStorage } from "../../../../lib/pdf-text-extract";
+import { extractPdfTextFromBuffer, extractPdfTextFromStorage } from "../../../../lib/pdf-text-extract";
 import { createHash } from "crypto";
 import fs from "fs";
 import path from "path";
@@ -140,7 +140,7 @@ const buildSourcesSummary = (sources: SourceEntry[]) => {
     if (entry.type === "youtube") return `YouTube transcript: ${entry.title}`;
     const excerptIds = entry.excerptIds ? [...new Set(entry.excerptIds)].sort((a, b) => a - b) : [];
     if (entry.pages && typeof entry.pages === "object" && "from" in entry.pages && "to" in entry.pages) {
-      const pages = `${entry.pages.from}–${entry.pages.to}`;
+      const pages = `${entry.pages.from}-${entry.pages.to}`;
       return excerptIds.length
         ? `${entry.title} (pages: ${pages}; excerpts: ${excerptIds.join(", ")})`
         : `${entry.title} (pages: ${pages})`;
@@ -689,6 +689,7 @@ export async function POST(req: NextRequest) {
     let clientRequestId: unknown;
     let scopeBody: unknown;
     let selectedSourcesBody: unknown;
+    let attachmentsBody: unknown;
     try {
       ({
         message,
@@ -703,6 +704,7 @@ export async function POST(req: NextRequest) {
         clientRequestId,
         scope: scopeBody,
         selectedSources: selectedSourcesBody,
+        attachments: attachmentsBody,
       } = await req.json());
     } catch (err) {
       log("warn", stage, { code: "invalid_json", message: String(err) });
@@ -716,6 +718,17 @@ export async function POST(req: NextRequest) {
             title: typeof item?.title === "string" ? item.title : "",
           }))
           .filter((item: any) => item.id)
+      : [];
+    const attachments = Array.isArray(attachmentsBody)
+      ? attachmentsBody
+          .map((item: any) => ({
+            id: typeof item?.id === "string" ? item.id : "",
+            name: typeof item?.name === "string" ? item.name : "attachment",
+            type: typeof item?.type === "string" ? item.type : "",
+            text: typeof item?.text === "string" ? item.text : "",
+            base64: typeof item?.base64 === "string" ? item.base64 : "",
+          }))
+          .filter((item: any) => item.name)
       : [];
     const scopeValue =
       typeof scopeBody === "string" && ["lesson", "course", "platform", "auto"].includes(scopeBody)
@@ -1109,7 +1122,38 @@ export async function POST(req: NextRequest) {
     stage = "pdf:attach";
     log("info", stage, { attachedCharsTotal: pdfCharsUsed, attachedPdfsCount: pdfSources.length });
 
-    const combinedContextText = [contextText, ...pdfContextParts, ...youtubeContextParts]
+    const attachmentContextParts: string[] = [];
+    if (attachments.length > 0) {
+      stage = "attachment:parse";
+      log("info", stage, { count: attachments.length });
+      for (const item of attachments) {
+        const name = String(item?.name || "attachment");
+        const type = String(item?.type || "");
+        if (item?.text) {
+          const trimmed = truncateText(item.text, 8000);
+          if (trimmed) {
+            attachmentContextParts.push(`User attachment: ${name}\n${trimmed}`);
+          }
+          continue;
+        }
+        if (item?.base64 && (type.includes("pdf") || name.toLowerCase().endsWith(".pdf"))) {
+          try {
+            stage = "attachment:extract";
+            log("info", stage, { name });
+            const buffer = Buffer.from(item.base64, "base64");
+            const { text } = await extractPdfTextFromBuffer(buffer, 10);
+            const trimmed = truncateText(text || "", 8000);
+            if (trimmed) {
+              attachmentContextParts.push(`User attachment: ${name}\n${trimmed}`);
+            }
+          } catch (err) {
+            log("warn", stage, { code: "attachment_extract_failed", message: String(err) });
+          }
+        }
+      }
+    }
+
+    const combinedContextText = [contextText, ...attachmentContextParts, ...pdfContextParts, ...youtubeContextParts]
       .filter(Boolean)
       .join("\n\n")
       .trim();
@@ -1212,6 +1256,7 @@ export async function POST(req: NextRequest) {
             },
             sources: data.sources || [],
             sourcesSummary: data.sourcesSummary || "",
+            sourcesLabel: data.sourcesLabel || data.sourcesSummary || "",
             references: data.references || [],
             citations: data.citations || [],
             citationMeta: data.citationMeta || [],
@@ -1320,6 +1365,7 @@ export async function POST(req: NextRequest) {
       `You are a helpful general tutor and platform helper. Answer normally like ChatGPT. ` +
       `Do NOT mention sources, excerpts, or context packs. ` +
       `Only use the platform handbook when the question is about XY-School (roles, navigation, support). ` +
+      `Use Markdown for formatting. Use $...$ and $$...$$ for math. Use triple backticks for code blocks. ` +
       `Output must be ONLY in ${lang}. Do not mix languages. ` +
       `Return a JSON object with keys: answerMarkdown (string), citations (array), confidence ("low"|"medium"|"high"), needsMoreContext (boolean), clarifyingQuestion (string or null).`;
     const groundedSystemPrompt =
@@ -1327,6 +1373,7 @@ export async function POST(req: NextRequest) {
       `If the user asks "according to the PDF/lesson/chapter" and the information is not present in the provided excerpts, respond exactly: "I didn’t find this in the selected materials." ` +
       `Then optionally add: "General explanation:" followed by a general explanation. ` +
       `Do not include sources or citations text inside the answer string. ` +
+      `Use Markdown for formatting. Use $...$ and $$...$$ for math. Use triple backticks for code blocks. ` +
       `Output must be ONLY in ${lang}. Do not mix languages. Translate any excerpt content into ${lang}. ` +
       `${styleInstruction} ${policyInstruction} ${fullSolutionInstruction} ` +
       `Return a JSON object with keys: answerMarkdown (string), citations (array of chunk ids), confidence ("low"|"medium"|"high"), needsMoreContext (boolean), clarifyingQuestion (string or null). ` +
@@ -1373,26 +1420,55 @@ export async function POST(req: NextRequest) {
     stage = "openai:parse";
     log("info", stage);
     const rawReplyText = extractReply(data) || "";
-    let replyText = rawReplyText || "Sorry, I could not generate a reply.";
-    let citations: string[] = [];
-    let confidence: "low" | "medium" | "high" | undefined;
-    let needsMoreContext: boolean | undefined;
-    let clarifyingQuestion: string | null | undefined;
-    if (rawReplyText) {
+    const tryParseJson = (text: string) => {
       try {
-        const parsed = JSON.parse(rawReplyText);
-        if (typeof parsed?.answerMarkdown === "string") replyText = parsed.answerMarkdown;
-        else if (typeof parsed?.answer === "string") replyText = parsed.answer;
-        if (Array.isArray(parsed?.citations)) citations = parsed.citations.filter((c: unknown) => typeof c === "string");
-        if (parsed?.confidence === "low" || parsed?.confidence === "medium" || parsed?.confidence === "high") {
-          confidence = parsed.confidence;
+        return JSON.parse(text);
+      } catch {
+        const start = text.indexOf("{");
+        const end = text.lastIndexOf("}");
+        if (start >= 0 && end > start) {
+          try {
+            return JSON.parse(text.slice(start, end + 1));
+          } catch {
+            return null;
+          }
         }
-        if (typeof parsed?.needsMoreContext === "boolean") needsMoreContext = parsed.needsMoreContext;
-        if (typeof parsed?.clarifyingQuestion === "string") clarifyingQuestion = parsed.clarifyingQuestion;
-      } catch (err) {
-        log("warn", stage, { code: "openai_invalid_output", message: String(err) });
-        // keep raw reply
+        return null;
       }
+    };
+    const parsed = rawReplyText ? tryParseJson(rawReplyText) : null;
+    const extractFromRaw = (raw: string) => {
+      const match = raw.match(/"answerMarkdown"\s*:\s*"([\s\S]*?)"\s*(?:,|\})/);
+      if (match?.[1]) {
+        try {
+          return JSON.parse(`"${match[1].replace(/"/g, '\\"')}"`);
+        } catch {
+          return match[1];
+        }
+      }
+      return raw;
+    };
+    let replyText =
+      typeof parsed?.answerMarkdown === "string"
+        ? parsed.answerMarkdown
+        : typeof parsed?.answer === "string"
+          ? parsed.answer
+          : rawReplyText
+            ? extractFromRaw(rawReplyText)
+            : "Sorry, I could not generate a reply.";
+    let citations: string[] = Array.isArray(parsed?.citations)
+      ? parsed.citations.filter((c: unknown) => typeof c === "string")
+      : [];
+    let confidence: "low" | "medium" | "high" =
+      parsed?.confidence === "low" || parsed?.confidence === "medium" || parsed?.confidence === "high"
+        ? parsed.confidence
+        : "medium";
+    let needsMoreContext: boolean =
+      typeof parsed?.needsMoreContext === "boolean" ? parsed.needsMoreContext : true;
+    let clarifyingQuestion: string | null =
+      typeof parsed?.clarifyingQuestion === "string" ? parsed.clarifyingQuestion : "Could you уточнить вопрос?";
+    if (!parsed && rawReplyText) {
+      log("warn", stage, { code: "openai_invalid_output" });
     }
     replyText = replyText.replace(/^\s*(Sources?|Citations?)\s*:.*$/gim, "").trim();
 
@@ -1536,6 +1612,8 @@ export async function POST(req: NextRequest) {
     const nextMonthly = monthlyTokens + usage.input_tokens + usage.output_tokens;
     const sourcesSummary = buildSourcesSummary(structuredSources);
     const references = buildReferences(citations, structuredSources, citationMeta);
+    const citationsPayload = references.map((ref) => ({ title: ref.title, note: ref.label }));
+    const sourcesLabel = sourcesSummary || "";
 
     stage = "quota:write";
     log("info", stage);
@@ -1576,6 +1654,7 @@ export async function POST(req: NextRequest) {
         tx.set(assistantMessageRef, {
           role: "assistant",
           content: replyText,
+          answerMarkdown: replyText,
           createdAt: now,
           model: OPENAI_MODEL,
           inputTokens: usage.input_tokens,
@@ -1586,8 +1665,10 @@ export async function POST(req: NextRequest) {
           uid,
           sources: structuredSources,
           sourcesSummary,
+          sourcesLabel,
           references,
-          citations,
+          citations: citationsPayload,
+          citationIds: citations,
           citationMeta,
           mode,
           policyApplied,
@@ -1633,8 +1714,9 @@ export async function POST(req: NextRequest) {
         usage,
         sources: structuredSources,
         sourcesSummary,
+        sourcesLabel,
         references,
-        citations,
+        citations: citationsPayload,
         citationMeta,
         pdfUnreadable,
         confidence,

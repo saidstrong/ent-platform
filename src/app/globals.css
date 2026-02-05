@@ -34,6 +34,10 @@ body {
   color: var(--text);
 }
 
+.font-kz {
+  font-family: var(--font-kz), "Noto Sans", system-ui, -apple-system, sans-serif;
+}
+
 a {
   text-decoration: none;
 }

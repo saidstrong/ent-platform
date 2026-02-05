@@ -1,9 +1,11 @@
-'use client';
+﻿'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, usePathname } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 import Button from "./ui/button";
 import Textarea from "./ui/textarea";
 import Card from "./ui/card";
@@ -14,11 +16,12 @@ import { fetchLesson } from "../lib/data";
 type AssistantMessage = {
   role: "user" | "assistant";
   text: string;
-  sources?: SourceEntry[] | string[];
-  sourcesSummary?: string;
-  references?: ReferenceEntry[];
-  citations?: string[];
-  citationMeta?: Array<{ resourceId: string; name: string; excerpts?: number[] }>;
+  answerMarkdown?: string;
+  citations?: CitationItem[];
+  confidence?: "low" | "medium" | "high";
+  needsMoreContext?: boolean;
+  clarifyingQuestion?: string | null;
+  sourcesLabel?: string;
   mode?: string;
   policyApplied?: {
     allowDirectAnswers?: boolean;
@@ -33,11 +36,12 @@ type ThreadMessage = {
   id: string;
   role: "user" | "assistant" | "system";
   content: string;
-  sources?: SourceEntry[] | string[];
-  sourcesSummary?: string;
-  references?: ReferenceEntry[];
-  citations?: string[];
-  citationMeta?: Array<{ resourceId: string; name: string; excerpts?: number[] }>;
+  answerMarkdown?: string;
+  citations?: CitationItem[];
+  confidence?: "low" | "medium" | "high";
+  needsMoreContext?: boolean;
+  clarifyingQuestion?: string | null;
+  sourcesLabel?: string;
   mode?: string;
   createdAt?: any;
   policyApplied?: {
@@ -49,38 +53,24 @@ type ThreadMessage = {
   };
 };
 
-type CitationPreview = {
-  id: string;
-  name?: string;
-  snippet?: string;
-  pageLabel?: string;
-  loading?: boolean;
-  error?: string;
-  messageKey: string;
-};
-
-type SourceEntry = {
-  type: "pdf" | "course" | "youtube";
-  title: string;
-  docId?: string;
-  pages?: number[] | { from: number; to: number };
-  excerptIds?: number[];
-  snippet?: string;
-};
-
-type ReferenceEntry = {
-  type: "pdf" | "course" | "youtube";
-  title: string;
-  label: string;
-  excerptIndex?: number;
-  page?: number;
-  snippet?: string;
-};
+type CitationItem = {
+  title?: string;
+  url?: string;
+  note?: string;
+} | string;
 
 type SourceOption = {
   id: string;
   type: "pdf" | "youtube";
   title: string;
+};
+
+type AttachmentItem = {
+  id: string;
+  name: string;
+  type: string;
+  text?: string;
+  base64?: string;
 };
 
 type AssistantState = {
@@ -113,6 +103,56 @@ const formatRemaining = (remaining?: { dailyMessagesLeft?: number; monthlyTokens
   return `${remaining.dailyMessagesLeft ?? 0} / ${remaining.monthlyTokensLeft ?? 0}`;
 };
 
+const stripMetaLines = (text: string) =>
+  text.replace(/^\s*(Sources?|Citations?)\s*:.*$/gim, "").trim();
+
+const tryParseJson = (text: string) => {
+  try {
+    return JSON.parse(text);
+  } catch {
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      try {
+        return JSON.parse(text.slice(start, end + 1));
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+};
+
+const decodeJsonString = (value: string) => {
+  try {
+    return JSON.parse(`"${value.replace(/"/g, '\\"')}"`);
+  } catch {
+    return value;
+  }
+};
+
+const extractAnswerFromRaw = (raw: string) => {
+  if (!raw) return "";
+  const parsed = tryParseJson(raw);
+  if (parsed && typeof parsed.answerMarkdown === "string") return parsed.answerMarkdown;
+  if (parsed && typeof parsed.answer === "string") return parsed.answer;
+  const match = raw.match(/"answerMarkdown"\s*:\s*"([\s\S]*?)"\s*(?:,|\})/);
+  if (match?.[1]) {
+    return decodeJsonString(match[1]);
+  }
+  return raw;
+};
+
+const resolveAssistantMarkdown = (raw?: string, answerMarkdown?: string) => {
+  const base =
+    typeof answerMarkdown === "string" && answerMarkdown.trim().length
+      ? answerMarkdown
+      : raw
+        ? extractAnswerFromRaw(raw)
+        : "";
+  return stripMetaLines(base);
+};
+
 export const AssistantPanel = () => {
   const { open, close } = useAssistant();
   const { user, loading } = useAuth();
@@ -129,10 +169,10 @@ export const AssistantPanel = () => {
   const [threadMessages, setThreadMessages] = useState<ThreadMessage[]>([]);
   const [newThreadNext, setNewThreadNext] = useState(false);
   const [threadBusy, setThreadBusy] = useState(false);
-  const [citationPreview, setCitationPreview] = useState<CitationPreview | null>(null);
-  const [expandedCitations, setExpandedCitations] = useState<Record<string, boolean>>({});
+  const [expandedDetails, setExpandedDetails] = useState<Record<string, boolean>>({});
   const [availableSources, setAvailableSources] = useState<SourceOption[]>([]);
   const [selectedSources, setSelectedSources] = useState<SourceOption[]>([]);
+  const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
   const [showSourcesPicker, setShowSourcesPicker] = useState(false);
   const [selectedScope, setSelectedScope] = useState<"lesson" | "course" | "platform" | null>(null);
   const [policyInfo, setPolicyInfo] = useState<{ mode?: string; policyApplied?: ThreadMessage["policyApplied"] } | null>(
@@ -142,6 +182,7 @@ export const AssistantPanel = () => {
   const threadLoadingRef = useRef(false);
   const sendingRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const canAsk = !!user && !loading;
   const scopeContext = useMemo(() => {
@@ -223,6 +264,40 @@ export const AssistantPanel = () => {
     }
   }, [selectedScope, scopeContext.lessonId]);
 
+  const handleAttachFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const next: AttachmentItem[] = [];
+    for (const file of Array.from(files)) {
+      const name = file.name || "attachment";
+      const type = file.type || "";
+      const id = `${name}_${file.lastModified}_${file.size}`;
+      const isPdf = type.includes("pdf") || name.toLowerCase().endsWith(".pdf");
+      const isText = type.startsWith("text/") || name.toLowerCase().endsWith(".md") || name.toLowerCase().endsWith(".txt");
+      if (!isPdf && !isText) continue;
+      if (file.size > 5 * 1024 * 1024) continue;
+      if (isPdf) {
+        const buffer = await file.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        let binary = "";
+        bytes.forEach((b) => {
+          binary += String.fromCharCode(b);
+        });
+        const base64 = btoa(binary);
+        next.push({ id, name, type: "pdf", base64 });
+      } else {
+        const text = await file.text();
+        next.push({ id, name, type: "text", text });
+      }
+    }
+    if (next.length) {
+      setAttachments((prev) => {
+        const map = new Map(prev.map((item) => [item.id, item]));
+        next.forEach((item) => map.set(item.id, item));
+        return Array.from(map.values());
+      });
+    }
+  };
+
   const fetchWithAuth = useCallback(
     async (url: string, init?: RequestInit, retry = true) => {
       if (!user) {
@@ -286,7 +361,10 @@ export const AssistantPanel = () => {
         const res = await fetchWithAuth(`/api/ai/threads/${threadId}`);
         const payload = await res.json().catch(() => ({}));
         if (res.ok && payload?.ok !== false) {
-          const msgs = payload.messages || [];
+          const msgs = (payload.messages || []).map((msg: ThreadMessage) => ({
+            ...msg,
+            sourcesLabel: msg.sourcesLabel || (msg as any).sourcesSummary || "",
+          }));
           setThreadMessages((prev) => {
             const map = new Map<string, ThreadMessage>();
             prev.forEach((msg) => map.set(msg.id || `${msg.role}:${msg.content}`, msg));
@@ -378,6 +456,7 @@ export const AssistantPanel = () => {
           clientRequestId,
           scope: effectiveScope,
           selectedSources: groundedMode ? selectedSources : [],
+          attachments,
         }),
       });
       const payload = await res.json();
@@ -387,23 +466,26 @@ export const AssistantPanel = () => {
         }
         throw new Error(payload?.error || t("ai.genericError"));
       }
-      const answerText =
+      const rawAnswer =
         typeof payload?.answerMarkdown === "string"
           ? payload.answerMarkdown
           : typeof payload?.answer === "string"
             ? payload.answer
             : payload.replyText;
+      const answerText = resolveAssistantMarkdown(rawAnswer, payload?.answerMarkdown);
+      const sourcesLabel = payload.sourcesLabel || payload.sourcesSummary || "";
       if (activeThreadId) {
         upsertThreadMessage({
           id: `a_${clientRequestId}`,
           role: "assistant",
           content: answerText,
-          createdAt: localCreatedAt,
-          sources: payload.sources,
-          sourcesSummary: payload.sourcesSummary,
-          references: payload.references,
+          answerMarkdown: answerText,
           citations: payload.citations,
-          citationMeta: payload.citationMeta,
+          confidence: payload.confidence,
+          needsMoreContext: payload.needsMoreContext,
+          clarifyingQuestion: payload.clarifyingQuestion,
+          sourcesLabel,
+          createdAt: localCreatedAt,
           mode: payload.mode,
           policyApplied: payload.policyApplied,
         });
@@ -413,11 +495,12 @@ export const AssistantPanel = () => {
           {
             role: "assistant",
             text: answerText,
-            sources: payload.sources,
-            sourcesSummary: payload.sourcesSummary,
-            references: payload.references,
+            answerMarkdown: answerText,
             citations: payload.citations,
-            citationMeta: payload.citationMeta,
+            confidence: payload.confidence,
+            needsMoreContext: payload.needsMoreContext,
+            clarifyingQuestion: payload.clarifyingQuestion,
+            sourcesLabel,
             mode: payload.mode,
             policyApplied: payload.policyApplied,
           },
@@ -511,245 +594,73 @@ export const AssistantPanel = () => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [open, dedupedThreadMessages.length, messages.length, sending]);
 
-  const renderMeta = (
-    sources?: SourceEntry[] | string[],
-    sourcesSummary?: string,
-    references?: ReferenceEntry[],
-    citations?: string[],
-    messageKey?: string,
-    answerText?: string,
-    citationMeta?: ThreadMessage["citationMeta"],
+  const renderDetails = (
+    messageKey: string,
+    details: {
+      sourcesLabel?: string;
+      citations?: CitationItem[];
+      confidence?: "low" | "medium" | "high";
+      needsMoreContext?: boolean;
+      clarifyingQuestion?: string | null;
+    },
   ) => {
-    if (
-      (!sources || sources.length === 0) &&
-      (!citations || citations.length === 0) &&
-      !citationMeta?.length &&
-      !sourcesSummary
-    ) {
-      return null;
-    }
-
-    const normalizeSources = () => {
-      const normalized: SourceEntry[] = [];
-      if (Array.isArray(sources) && sources.length > 0) {
-        if (typeof sources[0] === "string") {
-          (sources as string[]).forEach((entry) => {
-            if (!entry) return;
-            if (entry.toLowerCase().includes("course metadata")) {
-              normalized.push({ type: "course", title: "Course metadata" });
-              return;
-            }
-            const match = entry.match(/^(.*)\s+excerpts:\s*(.+)$/i);
-            if (match) {
-              const excerptIds = match[2]
-                .split(",")
-                .map((value) => Number(value.trim()))
-                .filter((value) => Number.isFinite(value));
-              normalized.push({ type: "pdf", title: match[1].trim(), excerptIds });
-              return;
-            }
-            normalized.push({ type: "pdf", title: entry.trim() });
-          });
-        } else {
-          (sources as SourceEntry[]).forEach((entry) => {
-            if (entry?.type) {
-              normalized.push(entry);
-              return;
-            }
-            normalized.push({
-              type: "pdf",
-              title: entry?.title || "PDF",
-              docId: entry?.docId,
-              pages: entry?.pages,
-              excerptIds: entry?.excerptIds,
-              snippet: entry?.snippet,
-            });
-          });
-        }
-      }
-      if (normalized.length === 0 && citationMeta?.length) {
-        citationMeta.forEach((meta) => {
-          normalized.push({
-            type: "pdf",
-            title: meta.name,
-            docId: meta.resourceId,
-            excerptIds: meta.excerpts,
-          });
-        });
-      }
-      return normalized;
-    };
-
-    const normalizedSources = normalizeSources();
-    const nameByResource = new Map<string, string>();
-    normalizedSources.forEach((entry) => {
-      if (entry.docId && entry.title) {
-        nameByResource.set(entry.docId, entry.title);
-      }
-    });
-    (citationMeta || []).forEach((meta) => {
-      if (meta?.resourceId && meta?.name) {
-        nameByResource.set(meta.resourceId, meta.name);
-      }
-    });
-
-    const formatPages = (pages?: SourceEntry["pages"]) => {
-      if (!pages) return "";
-      if (Array.isArray(pages)) {
-        const unique = Array.from(new Set(pages)).sort((a, b) => a - b);
-        return unique.join(", ");
-      }
-      return pages.from && pages.to ? `${pages.from}–${pages.to}` : "";
-    };
-
-    const summaryParts = normalizedSources.map((entry) => {
-      if (entry.type === "course") return entry.title || "Course metadata";
-      const excerptIds = entry.excerptIds ? [...new Set(entry.excerptIds)].sort((a, b) => a - b) : [];
-      const pages = formatPages(entry.pages);
-      if (pages && excerptIds.length) {
-        return `${entry.title} pages: ${pages} (excerpts: ${excerptIds.join(", ")})`;
-      }
-      if (pages) {
-        return `${entry.title} pages: ${pages}`;
-      }
-      if (excerptIds.length) {
-        return `${entry.title} excerpts: ${excerptIds.join(", ")}`;
-      }
-      return entry.title;
-    });
-
-    const showCitations = messageKey ? !!expandedCitations[messageKey] : false;
-    const fallbackRefs =
-      references && references.length
-        ? references.map((ref) => `${ref.title} — ${ref.label}`)
-        : (citations || []).map((id) => {
-            const [resourceId, chunkRaw] = id.split("#");
-            const name = nameByResource.get(resourceId) || "PDF";
-            const numeric = Number(chunkRaw);
-            const display = Number.isFinite(numeric) ? String(numeric) : chunkRaw ?? "";
-            return `${name} — excerpt ${display}`.trim();
-          });
-    const referencesCount = fallbackRefs.length;
-    const summaryText = sourcesSummary?.trim()
-      ? sourcesSummary.trim()
-      : summaryParts.length
-        ? `${t("ai.sources")}: ${summaryParts.join("; ")}`
-        : "";
-    const formatCitationLabel = (id: string) => {
-      const [resourceId, chunkRaw] = id.split("#");
-      const name = nameByResource.get(resourceId) || "PDF";
-      const numeric = Number(chunkRaw);
-      const display = Number.isFinite(numeric) ? String(numeric) : chunkRaw ?? "";
-      return `${name} — excerpt ${display}`.trim();
-    };
-
+    const { sourcesLabel, citations, confidence, needsMoreContext, clarifyingQuestion } = details;
+    const citationsList = citations || [];
+    const showDetails = !!expandedDetails[messageKey];
+    const hasDetails =
+      !!sourcesLabel ||
+      citationsList.length > 0 ||
+      !!confidence ||
+      !!clarifyingQuestion ||
+      typeof needsMoreContext === "boolean";
+    if (!hasDetails) return null;
     return (
       <div className="mt-2 space-y-2 text-[11px] text-[var(--muted)]">
-        {summaryText ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <span>{summaryText}</span>
+        <button
+          type="button"
+          className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-[var(--text)] hover:opacity-80"
+          onClick={() => setExpandedDetails((prev) => ({ ...prev, [messageKey]: !prev[messageKey] }))}
+        >
+          {showDetails ? "Hide details" : "Details"}
+        </button>
+        {showDetails && (
+          <div className="space-y-2">
+            {sourcesLabel ? <div>{sourcesLabel}</div> : null}
+            {confidence ? <div>Confidence: {confidence}</div> : null}
+            {typeof needsMoreContext === "boolean" ? (
+              <div>Needs more context: {needsMoreContext ? "Yes" : "No"}</div>
+            ) : null}
+            {clarifyingQuestion ? <div>Clarifying question: {clarifyingQuestion}</div> : null}
+            {citationsList.length > 0 ? (
+              <div className="space-y-1">
+                <div className="text-[10px] uppercase text-[var(--muted)]">Citations</div>
+                <ul className="list-disc space-y-1 pl-4 text-[10px] text-[var(--text)]">
+                  {citationsList.map((item, idx) => {
+                    if (typeof item === "string") {
+                      const [, chunk] = item.split("#");
+                      const label = chunk ? `Excerpt ${chunk}` : item;
+                      return <li key={`citation-${idx}`}>{label}</li>;
+                    }
+                    return (
+                      <li key={`${item.title || "citation"}-${idx}`}>
+                        {item.url ? (
+                          <a className="underline" href={item.url} target="_blank" rel="noreferrer">
+                            {item.title || item.url}
+                          </a>
+                        ) : (
+                          <span>{item.title || "Reference"}</span>
+                        )}
+                        {item.note ? ` — ${item.note}` : ""}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ) : null}
           </div>
-        ) : null}
-        <div className="flex flex-wrap items-center gap-2">
-          {answerText ? (
-            <button
-              type="button"
-              className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-[var(--text)] hover:opacity-80"
-              onClick={() => {
-                if (typeof navigator === "undefined" || !navigator.clipboard) return;
-                navigator.clipboard.writeText(answerText).catch(() => null);
-              }}
-            >
-              {t("ai.copyAnswer")}
-            </button>
-          ) : null}
-          {referencesCount > 0 ? (
-            <button
-              type="button"
-              className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-[var(--text)] hover:opacity-80"
-              onClick={() => {
-                if (!messageKey) return;
-                setExpandedCitations((prev) => ({ ...prev, [messageKey]: !prev[messageKey] }));
-              }}
-            >
-              {showCitations ? t("ai.hideCitations") : `${t("ai.showCitations")} (${referencesCount})`}
-            </button>
-          ) : null}
-        </div>
-        {showCitations && referencesCount > 0 ? (
-          <div className="flex flex-wrap items-center gap-1">
-            {fallbackRefs.map((label) => (
-              <span
-                key={label}
-                className="rounded border border-[var(--border)] bg-[var(--card)] px-1.5 py-0.5 text-[10px] text-[var(--text)]"
-              >
-                {label}
-              </span>
-            ))}
-          </div>
-        ) : null}
+        )}
       </div>
     );
-  };
-
-  const openCitation = async (citationId: string, messageKey?: string) => {
-    if (!user) return;
-    const ownerKey = messageKey || citationId;
-    setCitationPreview({ id: citationId, loading: true, messageKey: ownerKey });
-    try {
-      const res = await fetchWithAuth(`/api/ai/citations/${encodeURIComponent(citationId)}`);
-      const payload = await res.json().catch(() => ({}));
-      if (!res.ok || payload?.ok === false) {
-        setCitationPreview({
-          id: citationId,
-          error: t("ai.genericError"),
-          messageKey: ownerKey,
-        });
-        return;
-      }
-      const formatPages = (pages?: SourceEntry["pages"]) => {
-        if (!pages) return "";
-        if (Array.isArray(pages)) {
-          const unique = Array.from(new Set(pages)).sort((a, b) => a - b);
-          return unique.join(", ");
-        }
-        return pages.from && pages.to ? `${pages.from}–${pages.to}` : "";
-      };
-      const findMessageByKey = () => {
-        const threadMatch = dedupedThreadMessages.find((msg) => msg.id === ownerKey);
-        if (threadMatch) return threadMatch;
-        return messages.find((msg, index) => `local-${index}` === ownerKey);
-      };
-      let pageLabel = "";
-      const message = findMessageByKey();
-      if (message && Array.isArray(message.sources) && message.sources.length > 0 && typeof message.sources[0] !== "string") {
-        const [resourceId] = citationId.split("#");
-        const entry = (message.sources as SourceEntry[]).find(
-          (source) => source.type === "pdf" && source.docId === resourceId,
-        );
-        const pages = entry ? formatPages(entry.pages) : "";
-        if (pages) {
-          pageLabel = `Pages: ${pages}`;
-        }
-      }
-      setCitationPreview({
-        id: citationId,
-        name: payload?.name,
-        snippet: payload?.snippet,
-        pageLabel,
-        messageKey: ownerKey,
-      });
-    } catch {
-      setCitationPreview({ id: citationId, error: t("ai.genericError"), messageKey: ownerKey });
-    }
-  };
-
-  const formatExcerptLabel = (citationId?: string) => {
-    if (!citationId) return "";
-    const [, raw] = citationId.split("#");
-    const index = Number(raw);
-    if (Number.isFinite(index)) return `Excerpt ${index}`;
-    return citationId;
   };
 
   const renameThread = async () => {
@@ -848,12 +759,42 @@ export const AssistantPanel = () => {
                     className="rounded-full border border-[var(--border)] bg-[var(--card)] px-2 py-0.5 text-[10px] text-[var(--text)]"
                     onClick={() => setSelectedSources((prev) => prev.filter((item) => item.id !== source.id))}
                   >
-                    {source.title} ×
+                    {source.title} x
                   </button>
                 ))
               )}
             </div>
           )}
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[var(--muted)]">
+            {attachments.map((file) => (
+              <button
+                key={file.id}
+                type="button"
+                className="rounded-full border border-[var(--border)] bg-[var(--card)] px-2 py-0.5 text-[10px] text-[var(--text)]"
+                onClick={() => setAttachments((prev) => prev.filter((item) => item.id !== file.id))}
+              >
+                {file.name} x
+              </button>
+            ))}
+            <button
+              type="button"
+              className="rounded-full border border-[var(--border)] bg-[var(--card)] px-2 py-0.5 text-[10px] font-semibold text-[var(--text)] hover:bg-[var(--surface)]"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              Attach file
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.txt,.md"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                void handleAttachFiles(e.target.files);
+                e.currentTarget.value = "";
+              }}
+            />
+          </div>
         </div>
         <Button size="sm" variant="ghost" onClick={close}>
           {t("ai.close")}
@@ -907,10 +848,6 @@ export const AssistantPanel = () => {
         )}
         {dedupedThreadMessages.map((msg) => {
           const messageKey = msg.id;
-          const showPreview =
-            citationPreview &&
-            citationPreview.messageKey === messageKey &&
-            msg.citations?.includes(citationPreview.id);
           return (
           <div
             key={msg.id}
@@ -922,40 +859,21 @@ export const AssistantPanel = () => {
           >
             {msg.role === "assistant" ? (
               <div className="prose prose-sm max-w-none dark:prose-invert">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+                  {resolveAssistantMarkdown(msg.content, msg.answerMarkdown)}
+                </ReactMarkdown>
               </div>
             ) : (
               <p>{msg.content}</p>
             )}
             {msg.role === "assistant" &&
-              renderMeta(
-                msg.sources,
-                msg.sourcesSummary,
-                msg.references,
-                msg.citations,
-                messageKey,
-                msg.content,
-                msg.citationMeta,
-              )}
-            {msg.role === "assistant" && showPreview && (
-              <div className="mt-2 hidden rounded-lg border border-[var(--border)] bg-[var(--surface)] p-2 text-[11px] text-[var(--text)] sm:block">
-                <div className="mb-1 flex items-center justify-between text-[10px] uppercase text-[var(--muted)]">
-                  <span>{citationPreview.name || "PDF"}</span>
-                  <button type="button" className="text-[var(--text)]" onClick={() => setCitationPreview(null)}>
-                    {t("ai.close")}
-                  </button>
-                </div>
-                {citationPreview.loading && <div>{t("ai.sending")}</div>}
-                {citationPreview.error && <div className="text-[var(--muted)]">{citationPreview.error}</div>}
-                {citationPreview.snippet && <div>{citationPreview.snippet}</div>}
-                {citationPreview.pageLabel && (
-                  <div className="text-[10px] text-[var(--muted)]">{citationPreview.pageLabel}</div>
-                )}
-                {citationPreview.id && (
-                  <div className="mt-1 text-[10px] text-[var(--muted)]">{formatExcerptLabel(citationPreview.id)}</div>
-                )}
-              </div>
-            )}
+              renderDetails(messageKey, {
+                sourcesLabel: msg.sourcesLabel,
+                citations: msg.citations,
+                confidence: msg.confidence,
+                needsMoreContext: msg.needsMoreContext,
+                clarifyingQuestion: msg.clarifyingQuestion,
+              })}
           </div>
           );
         })}
@@ -970,71 +888,25 @@ export const AssistantPanel = () => {
           >
             {msg.role === "assistant" ? (
               <div className="prose prose-sm max-w-none dark:prose-invert">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.text}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+                  {resolveAssistantMarkdown(msg.text, msg.answerMarkdown)}
+                </ReactMarkdown>
               </div>
             ) : (
               <p>{msg.text}</p>
             )}
             {msg.role === "assistant" &&
-              renderMeta(
-                msg.sources,
-                msg.sourcesSummary,
-                msg.references,
-                msg.citations,
-                `local-${idx}`,
-                msg.text,
-                msg.citationMeta,
-              )}
-            {msg.role === "assistant" &&
-              citationPreview &&
-              citationPreview.messageKey === `local-${idx}` &&
-              msg.citations?.includes(citationPreview.id) && (
-                <div className="mt-2 hidden rounded-lg border border-[var(--border)] bg-[var(--surface)] p-2 text-[11px] text-[var(--text)] sm:block">
-                  <div className="mb-1 flex items-center justify-between text-[10px] uppercase text-[var(--muted)]">
-                    <span>{citationPreview.name || "PDF"}</span>
-                    <button type="button" className="text-[var(--text)]" onClick={() => setCitationPreview(null)}>
-                      {t("ai.close")}
-                    </button>
-                  </div>
-                  {citationPreview.loading && <div>{t("ai.sending")}</div>}
-                  {citationPreview.error && <div className="text-[var(--muted)]">{citationPreview.error}</div>}
-                  {citationPreview.snippet && <div>{citationPreview.snippet}</div>}
-                  {citationPreview.pageLabel && (
-                    <div className="text-[10px] text-[var(--muted)]">{citationPreview.pageLabel}</div>
-                  )}
-                  {citationPreview.id && (
-                    <div className="mt-1 text-[10px] text-[var(--muted)]">
-                      {formatExcerptLabel(citationPreview.id)}
-                    </div>
-                  )}
-                </div>
-              )}
+              renderDetails(`local-${idx}`, {
+                sourcesLabel: msg.sourcesLabel,
+                citations: msg.citations,
+                confidence: msg.confidence,
+                needsMoreContext: msg.needsMoreContext,
+                clarifyingQuestion: msg.clarifyingQuestion,
+              })}
           </div>
         ))}
         <div ref={bottomRef} />
       </div>
-      {citationPreview && (
-        <>
-          <div className="fixed inset-0 z-[55] bg-black/30 sm:hidden" onClick={() => setCitationPreview(null)} />
-          <div className="fixed inset-x-0 bottom-0 z-[60] rounded-t-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-lg sm:hidden">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-semibold text-[var(--muted)]">{citationPreview.name || "PDF"}</span>
-              <button type="button" className="text-sm font-semibold text-[var(--text)]" onClick={() => setCitationPreview(null)}>
-                {t("ai.close")}
-              </button>
-            </div>
-            {citationPreview.loading && <p className="text-xs text-[var(--muted)]">{t("ai.sending")}</p>}
-            {citationPreview.error && <p className="text-xs text-[var(--muted)]">{citationPreview.error}</p>}
-            {citationPreview.snippet && <p className="text-sm text-[var(--text)]">{citationPreview.snippet}</p>}
-            {citationPreview.pageLabel && (
-              <p className="text-[11px] text-[var(--muted)]">{citationPreview.pageLabel}</p>
-            )}
-            {citationPreview.id && (
-              <p className="mt-2 text-[10px] text-[var(--muted)]">{formatExcerptLabel(citationPreview.id)}</p>
-            )}
-          </div>
-        </>
-      )}
       <div className="sticky bottom-0 border-t border-[var(--border)] bg-[var(--surface)]/95 px-4 py-3 backdrop-blur">
         {remaining && (
           <p className="mb-2 text-xs text-[var(--muted)]">
