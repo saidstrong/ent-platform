@@ -131,6 +131,28 @@ const decodeJsonString = (value: string) => {
   }
 };
 
+const normalizeForMathRendering = (text: string) => {
+  if (!text) return text;
+  let next = text;
+  if (next.includes("\\\\") && (next.includes("\\\\[") || next.includes("\\\\("))) {
+    next = next.replace(/\\\\([\\[\\]()])/g, "\\$1");
+  }
+  next = next.replace(/\\\[((?:.|\n)*?)\\\]/g, (_match, inner) => `\n\n$$${inner.trim()}$$\n\n`);
+  next = next.replace(/\\\(((?:.|\n)*?)\\\)/g, (_match, inner) => `$${inner.trim()}$`);
+  next = next
+    .split("\n")
+    .map((line) => {
+      const match = line.match(/^\s*\[(.+)\]\s*$/);
+      if (match?.[1]) {
+        return `$$${match[1]}$$`;
+      }
+      return line;
+    })
+    .join("\n");
+  next = next.replace(/\$\$([\s\S]+?)\$\$/g, (_match, inner) => `\n\n$$${inner.trim()}$$\n\n`);
+  return next;
+};
+
 const extractAnswerFromRaw = (raw: string) => {
   if (!raw) return "";
   const parsed = tryParseJson(raw);
@@ -150,8 +172,16 @@ const resolveAssistantMarkdown = (raw?: string, answerMarkdown?: string) => {
       : raw
         ? extractAnswerFromRaw(raw)
         : "";
-  return stripMetaLines(base);
+  return normalizeForMathRendering(stripMetaLines(base));
 };
+
+const MessageMarkdown = ({ value }: { value: string }) => (
+  <div className="prose prose-sm max-w-none overflow-x-auto dark:prose-invert">
+    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+      {value}
+    </ReactMarkdown>
+  </div>
+);
 
 export const AssistantPanel = () => {
   const { open, close } = useAssistant();
@@ -175,6 +205,7 @@ export const AssistantPanel = () => {
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
   const [showSourcesPicker, setShowSourcesPicker] = useState(false);
   const [selectedScope, setSelectedScope] = useState<"lesson" | "course" | "platform" | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [policyInfo, setPolicyInfo] = useState<{ mode?: string; policyApplied?: ThreadMessage["policyApplied"] } | null>(
     null,
   );
@@ -594,6 +625,22 @@ export const AssistantPanel = () => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [open, dedupedThreadMessages.length, messages.length, sending]);
 
+  useEffect(() => {
+    if (!open || !isFullscreen) return;
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsFullscreen(false);
+      }
+    };
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKey);
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener("keydown", handleKey);
+    };
+  }, [open, isFullscreen]);
+
   const renderDetails = (
     messageKey: string,
     details: {
@@ -706,23 +753,51 @@ export const AssistantPanel = () => {
   };
 
   const body = (
-    <Card className="flex h-full flex-col gap-3 overflow-hidden">
-      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border)] bg-[var(--surface)]/95 px-4 py-3 backdrop-blur">
-        <div>
-          <p className="text-sm font-semibold text-[var(--text)]">{t("ai.title")}</p>
-          <p className="text-xs text-[var(--muted)]">{t("ai.subtitle")}</p>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-[var(--muted)]">
-            <span className="rounded-full border border-[var(--border)] bg-[var(--card)] px-2 py-0.5 text-[10px] font-semibold uppercase text-[var(--text)]">
-              {modeLabel(effectiveMode)}
-            </span>
-            {hintModeEnabled && (
-              <span className="text-[10px] font-semibold text-[var(--muted)]">{t("ai.hintMode")}</span>
-            )}
-            <span className="rounded-full border border-[var(--border)] bg-[var(--card)] px-2 py-0.5 text-[10px] font-semibold uppercase text-[var(--text)]">
-              {groundedMode ? t("ai.modeGrounded") : t("ai.modeGeneral")}
-            </span>
+    <Card className="flex h-full flex-col gap-2 overflow-hidden">
+      <div className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--surface)]/95 px-3 py-2 backdrop-blur">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-[var(--text)]">{t("ai.title")}</p>
+            <p className="hidden text-[11px] text-[var(--muted)] sm:block">{t("ai.subtitle")}</p>
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              className="rounded border border-[var(--border)] bg-[var(--card)] px-2 py-1 text-[10px] font-semibold text-[var(--text)]"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              Attach
+            </button>
+            {effectiveScope === "lesson" && (
+              <button
+                type="button"
+                className="rounded border border-[var(--border)] bg-[var(--card)] px-2 py-1 text-[10px] font-semibold text-[var(--text)]"
+                onClick={() => setShowSourcesPicker(true)}
+              >
+                {t("ai.addSources")}
+              </button>
+            )}
+            <button
+              type="button"
+              className="rounded border border-[var(--border)] bg-[var(--card)] px-2 py-1 text-[10px] font-semibold text-[var(--text)]"
+              onClick={() => setIsFullscreen((prev) => !prev)}
+            >
+              {isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+            </button>
+            <Button size="sm" variant="ghost" onClick={close}>
+              {t("ai.close")}
+            </Button>
+          </div>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-[var(--muted)]">
+          <span className="rounded-full border border-[var(--border)] bg-[var(--card)] px-2 py-0.5 font-semibold uppercase text-[var(--text)]">
+            {modeLabel(effectiveMode)}
+          </span>
+          {hintModeEnabled && <span className="font-semibold">{t("ai.hintMode")}</span>}
+          <span className="rounded-full border border-[var(--border)] bg-[var(--card)] px-2 py-0.5 font-semibold uppercase text-[var(--text)]">
+            {groundedMode ? t("ai.modeGrounded") : t("ai.modeGeneral")}
+          </span>
+          <div className="flex flex-wrap items-center gap-1">
             {(["lesson", "course", "platform"] as const).map((option) => (
               <button
                 key={option}
@@ -737,35 +812,24 @@ export const AssistantPanel = () => {
                 {option === "platform" ? t("ai.modePlatform") : option === "course" ? t("ai.modeCourse") : t("ai.modeLesson")}
               </button>
             ))}
-            {effectiveScope === "lesson" && (
-              <button
-                type="button"
-                className="rounded-full border border-[var(--border)] bg-[var(--card)] px-2 py-0.5 text-[10px] font-semibold text-[var(--text)] hover:bg-[var(--surface)]"
-                onClick={() => setShowSourcesPicker(true)}
-              >
-                {t("ai.addSources")}
-              </button>
-            )}
           </div>
-          {effectiveScope === "lesson" && (
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[var(--muted)]">
-              {selectedSources.length === 0 ? (
-                <span>{t("ai.noSourcesSelected")}</span>
-              ) : (
-                selectedSources.map((source) => (
-                  <button
-                    key={source.id}
-                    type="button"
-                    className="rounded-full border border-[var(--border)] bg-[var(--card)] px-2 py-0.5 text-[10px] text-[var(--text)]"
-                    onClick={() => setSelectedSources((prev) => prev.filter((item) => item.id !== source.id))}
-                  >
-                    {source.title} x
-                  </button>
-                ))
-              )}
-            </div>
-          )}
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[var(--muted)]">
+        </div>
+        {(effectiveScope === "lesson" || attachments.length > 0) && (
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-[var(--muted)]">
+            {effectiveScope === "lesson" && selectedSources.length === 0 ? (
+              <span>{t("ai.noSourcesSelected")}</span>
+            ) : (
+              selectedSources.map((source) => (
+                <button
+                  key={source.id}
+                  type="button"
+                  className="rounded-full border border-[var(--border)] bg-[var(--card)] px-2 py-0.5 text-[10px] text-[var(--text)]"
+                  onClick={() => setSelectedSources((prev) => prev.filter((item) => item.id !== source.id))}
+                >
+                  {source.title} x
+                </button>
+              ))
+            )}
             {attachments.map((file) => (
               <button
                 key={file.id}
@@ -776,29 +840,19 @@ export const AssistantPanel = () => {
                 {file.name} x
               </button>
             ))}
-            <button
-              type="button"
-              className="rounded-full border border-[var(--border)] bg-[var(--card)] px-2 py-0.5 text-[10px] font-semibold text-[var(--text)] hover:bg-[var(--surface)]"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              Attach file
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,.txt,.md"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                void handleAttachFiles(e.target.files);
-                e.currentTarget.value = "";
-              }}
-            />
           </div>
-        </div>
-        <Button size="sm" variant="ghost" onClick={close}>
-          {t("ai.close")}
-        </Button>
+        )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.txt,.md"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            void handleAttachFiles(e.target.files);
+            e.currentTarget.value = "";
+          }}
+        />
       </div>
       <div className="flex-1 space-y-3 overflow-y-auto px-4 py-2">
         <div className="space-y-2">
@@ -935,13 +989,19 @@ export const AssistantPanel = () => {
     <>
       {open && (
         <>
-          <div className="fixed inset-0 z-40 bg-black/30 sm:hidden" onClick={close} />
-          <div className="fixed inset-0 z-50 flex flex-col bg-[var(--bg)] p-4 sm:hidden">
-            {body}
-          </div>
-          <div className="fixed right-6 top-24 z-40 hidden h-[70vh] w-[360px] sm:block">{body}</div>
+          {!isFullscreen && <div className="fixed inset-0 z-40 bg-black/30 sm:hidden" onClick={close} />}
+          {isFullscreen ? (
+            <div className="fixed inset-0 z-[70] flex flex-col bg-[var(--bg)] p-4">
+              {body}
+            </div>
+          ) : (
+            <>
+              <div className="fixed inset-0 z-50 flex flex-col bg-[var(--bg)] p-4 sm:hidden">{body}</div>
+              <div className="fixed right-6 top-24 z-40 hidden h-[70vh] w-[360px] sm:block">{body}</div>
+            </>
+          )}
           {showSourcesPicker && (
-            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+            <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4">
               <div className="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-lg">
                 <div className="mb-3 flex items-center justify-between">
                   <p className="text-sm font-semibold text-[var(--text)]">{t("ai.addSources")}</p>
