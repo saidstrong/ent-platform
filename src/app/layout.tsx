@@ -7,6 +7,7 @@ import "katex/dist/katex.min.css";
 import Providers from "../components/providers";
 import Navbar from "../components/navbar";
 import type { Language } from "../lib/types";
+import { Analytics } from "@vercel/analytics/next"
 
 const manrope = Manrope({ subsets: ["latin"], variable: "--font-sans" });
 const kzFont = localFont({
