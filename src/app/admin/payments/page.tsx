@@ -53,7 +53,7 @@ export default function AdminPaymentsPage() {
       ? "bg-amber-50 text-amber-700"
       : status === "approved"
         ? "bg-green-50 text-green-700"
-        : "bg-neutral-100 text-neutral-600";
+        : "bg-[var(--surface)] text-[var(--muted)]";
 
   const selectPayment = (payment: PaymentWithCourse) => {
     setActivePayment(payment);
@@ -87,7 +87,7 @@ export default function AdminPaymentsPage() {
         </div>
       </div>
       <Card className="overflow-hidden">
-        <div className="grid grid-cols-4 gap-2 border-b border-neutral-200 bg-neutral-50 px-4 py-2 text-xs font-semibold text-neutral-600">
+        <div className="grid grid-cols-4 gap-2 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-xs font-semibold text-[var(--muted)]">
           {columns.map((col) => (
             <span key={col}>{col}</span>
           ))}
@@ -96,17 +96,17 @@ export default function AdminPaymentsPage() {
           {payments.map((p) => (
             <button
               key={p.id}
-              className="grid w-full grid-cols-4 gap-2 px-4 py-3 text-left text-sm hover:bg-neutral-50"
+              className="grid w-full grid-cols-4 gap-2 px-4 py-3 text-left text-sm hover:bg-[var(--surface)]"
               onClick={() => selectPayment(p)}
               type="button"
             >
-              <span className="text-neutral-600">{formatAnyTimestamp(p.createdAt)}</span>
-              <span className="text-neutral-700">{p.uid}</span>
-              <span className="text-neutral-700">{p.course?.title_en || p.courseId}</span>
+              <span className="text-[var(--muted)]">{formatAnyTimestamp(p.createdAt)}</span>
+              <span className="text-[var(--text)]">{p.uid}</span>
+              <span className="text-[var(--text)]">{p.course?.title_en || p.courseId}</span>
               <span className={`w-fit rounded-full px-2 py-1 text-xs font-semibold ${statusPill(p.status)}`}>{p.status}</span>
             </button>
           ))}
-          {payments.length === 0 && <p className="px-4 py-3 text-sm text-neutral-600">No payments yet.</p>}
+          {payments.length === 0 && <p className="px-4 py-3 text-sm text-[var(--muted)]">No payments yet.</p>}
         </div>
       </Card>
 
@@ -119,12 +119,12 @@ export default function AdminPaymentsPage() {
                 Close
               </Button>
             </div>
-            <div className="text-sm text-neutral-600">
+            <div className="text-sm text-[var(--muted)]">
               <p>UID: {activePayment.uid}</p>
               <p>Course: {activePayment.course?.title_en || activePayment.courseId}</p>
               <p>Status: {activePayment.status}</p>
             </div>
-            <div className="flex flex-wrap gap-3 text-sm font-semibold text-blue-700">
+            <div className="flex flex-wrap gap-3 text-sm font-semibold text-[var(--text)]">
               {activePayment.proofUrl && (
                 <a href={activePayment.proofUrl} target="_blank" rel="noreferrer">
                   Open proof
@@ -133,7 +133,7 @@ export default function AdminPaymentsPage() {
               <a href={`/admin/courses/${activePayment.courseId}`}>Open course</a>
             </div>
             <div>
-              <label className="text-sm font-semibold text-neutral-700">Note</label>
+              <label className="text-sm font-semibold text-[var(--text)]">Note</label>
               <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional note for student" />
             </div>
             <div className="flex gap-2">

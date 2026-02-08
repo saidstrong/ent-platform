@@ -122,14 +122,14 @@ export default function TeacherAiAnalyticsPage() {
   }, [loading, user, canAccess, courseId, lang]);
 
   if (loading) {
-    return <p className="px-4 py-6 text-sm text-neutral-600">{t("aiAnalytics.loading")}</p>;
+    return <p className="px-4 py-6 text-sm text-[var(--muted)]">{t("aiAnalytics.loading")}</p>;
   }
 
   if (!user || !canAccess) {
     return (
       <Card className="m-4">
-        <p className="text-sm text-neutral-600">{t("aiAnalytics.accessDenied")}</p>
-        <Link href="/teacher" className="mt-2 inline-block text-sm text-blue-700">
+        <p className="text-sm text-[var(--muted)]">{t("aiAnalytics.accessDenied")}</p>
+        <Link href="/teacher" className="mt-2 inline-block text-sm text-[var(--text)]">
           {t("aiAnalytics.back")}
         </Link>
       </Card>
@@ -144,12 +144,12 @@ export default function TeacherAiAnalyticsPage() {
     <div className="mx-auto max-w-5xl space-y-4 px-4 py-8">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase text-neutral-500">{t("teacher.submissions")}</p>
+          <p className="text-xs uppercase text-[var(--muted)]">{t("teacher.submissions")}</p>
           <h1 className="text-2xl font-semibold">{t("aiAnalytics.title")}</h1>
-          <p className="text-xs text-neutral-500">{t("aiAnalytics.subtitle")}</p>
-          <p className="text-xs text-neutral-500">{scopeLabel}</p>
+          <p className="text-xs text-[var(--muted)]">{t("aiAnalytics.subtitle")}</p>
+          <p className="text-xs text-[var(--muted)]">{scopeLabel}</p>
         </div>
-        <Link href="/teacher" className="text-sm text-blue-700">
+        <Link href="/teacher" className="text-sm text-[var(--text)]">
           {t("aiAnalytics.back")}
         </Link>
       </div>
@@ -157,7 +157,7 @@ export default function TeacherAiAnalyticsPage() {
       <Card className="space-y-3">
         <div className="grid gap-3 md:grid-cols-3">
           <div className="space-y-1">
-            <label className="text-xs font-semibold uppercase text-neutral-500">{t("aiAnalytics.days")}</label>
+            <label className="text-xs font-semibold uppercase text-[var(--muted)]">{t("aiAnalytics.days")}</label>
             <Input
               type="number"
               min={1}
@@ -167,7 +167,7 @@ export default function TeacherAiAnalyticsPage() {
             />
           </div>
           <div className="space-y-1">
-            <label className="text-xs font-semibold uppercase text-neutral-500">{t("aiAnalytics.lessonLabel")}</label>
+            <label className="text-xs font-semibold uppercase text-[var(--muted)]">{t("aiAnalytics.lessonLabel")}</label>
             <Select
               value={lessonId}
               onChange={(e) => {
@@ -184,7 +184,7 @@ export default function TeacherAiAnalyticsPage() {
               ))}
             </Select>
             {!lessonsLoading && lessons.length === 0 && (
-              <p className="text-xs text-neutral-500">{t("aiAnalytics.noLessonsFound")}</p>
+              <p className="text-xs text-[var(--muted)]">{t("aiAnalytics.noLessonsFound")}</p>
             )}
           </div>
           <div className="flex items-end">
@@ -199,47 +199,47 @@ export default function TeacherAiAnalyticsPage() {
 
       <div className="grid gap-3 md:grid-cols-3">
         <Card className="p-4">
-          <p className="text-xs uppercase text-neutral-500">{t("aiAnalytics.totalRequests")}</p>
+          <p className="text-xs uppercase text-[var(--muted)]">{t("aiAnalytics.totalRequests")}</p>
           <p className="text-2xl font-semibold">{total}</p>
         </Card>
         <Card className="p-4">
-          <p className="text-xs uppercase text-neutral-500">{t("aiAnalytics.unsupportedRate")}</p>
+          <p className="text-xs uppercase text-[var(--muted)]">{t("aiAnalytics.unsupportedRate")}</p>
           <p className="text-2xl font-semibold">{unsupportedRate}%</p>
         </Card>
         <Card className="p-4">
-          <p className="text-xs uppercase text-neutral-500">{t("aiAnalytics.days")}</p>
+          <p className="text-xs uppercase text-[var(--muted)]">{t("aiAnalytics.days")}</p>
           <p className="text-2xl font-semibold">{data?.days || days}</p>
         </Card>
       </div>
 
       <Card className="p-4">
-        <p className="text-sm font-semibold text-neutral-700">{t("aiAnalytics.byOutcome")}</p>
-        <div className="mt-2 flex flex-wrap gap-2 text-xs text-neutral-600">
+        <p className="text-sm font-semibold text-[var(--text)]">{t("aiAnalytics.byOutcome")}</p>
+        <div className="mt-2 flex flex-wrap gap-2 text-xs text-[var(--muted)]">
           {data?.byOutcome
             ? Object.entries(data.byOutcome).map(([key, value]) => (
-                <span key={key} className="rounded-full bg-neutral-100 px-3 py-1">
+                <span key={key} className="rounded-full bg-[var(--surface)] px-3 py-1">
                   {key}: {value}
                 </span>
               ))
-            : <span className="text-neutral-500">{t("aiAnalytics.noData")}</span>}
+            : <span className="text-[var(--muted)]">{t("aiAnalytics.noData")}</span>}
         </div>
       </Card>
 
       <Card className="p-4">
-        <p className="text-sm font-semibold text-neutral-700">{t("aiAnalytics.byMode")}</p>
-        <div className="mt-2 flex flex-wrap gap-2 text-xs text-neutral-600">
+        <p className="text-sm font-semibold text-[var(--text)]">{t("aiAnalytics.byMode")}</p>
+        <div className="mt-2 flex flex-wrap gap-2 text-xs text-[var(--muted)]">
           {data?.byMode
             ? Object.entries(data.byMode).map(([key, value]) => (
-                <span key={key} className="rounded-full bg-neutral-100 px-3 py-1">
+                <span key={key} className="rounded-full bg-[var(--surface)] px-3 py-1">
                   {key}: {value}
                 </span>
               ))
-            : <span className="text-neutral-500">{t("aiAnalytics.noData")}</span>}
+            : <span className="text-[var(--muted)]">{t("aiAnalytics.noData")}</span>}
         </div>
       </Card>
 
       <Card className="overflow-hidden">
-        <div className="grid grid-cols-3 gap-2 border-b border-neutral-200 bg-neutral-50 px-4 py-2 text-xs font-semibold text-neutral-600">
+        <div className="grid grid-cols-3 gap-2 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-xs font-semibold text-[var(--muted)]">
           <span>{t("aiAnalytics.question")}</span>
           <span>{t("aiAnalytics.count")}</span>
           <span>{t("aiAnalytics.lastSeen")}</span>
@@ -247,13 +247,13 @@ export default function TeacherAiAnalyticsPage() {
         <div className="divide-y divide-neutral-100">
           {data?.topQuestions?.map((q) => (
             <div key={q.qHash} className="grid grid-cols-3 gap-2 px-4 py-3 text-sm">
-              <span className="text-neutral-700">{q.exampleTruncated || q.qHash}</span>
-              <span className="text-neutral-600">{q.count}</span>
-              <span className="text-neutral-500">{q.lastSeenAt ? new Date(q.lastSeenAt).toLocaleString() : "-"}</span>
+              <span className="text-[var(--text)]">{q.exampleTruncated || q.qHash}</span>
+              <span className="text-[var(--muted)]">{q.count}</span>
+              <span className="text-[var(--muted)]">{q.lastSeenAt ? new Date(q.lastSeenAt).toLocaleString() : "-"}</span>
             </div>
           ))}
           {(data?.topQuestions?.length ?? 0) === 0 && (
-            <p className="px-4 py-3 text-sm text-neutral-600">{t("aiAnalytics.noData")}</p>
+            <p className="px-4 py-3 text-sm text-[var(--muted)]">{t("aiAnalytics.noData")}</p>
           )}
         </div>
       </Card>

@@ -68,8 +68,24 @@ export async function GET(req: Request) {
     }
 
     const { searchParams } = new URL(req.url);
+    const scope = (searchParams.get("scope") || "platform").toLowerCase();
     const courseId = searchParams.get("courseId") || "";
     const lessonId = searchParams.get("lessonId") || "";
+    const getScopeKey = () => {
+      if (scope === "lesson") {
+        if (!courseId || !lessonId) return null;
+        return `lesson:${courseId}:${lessonId}`;
+      }
+      if (scope === "course") {
+        if (!courseId) return null;
+        return `course:${courseId}`;
+      }
+      return "platform";
+    };
+    const scopeKey = getScopeKey();
+    if (!scopeKey) {
+      return respondError(400, "req:parse", "invalid_scope", "Missing scope identifiers.");
+    }
 
     stage = "threads:read";
     log("info", stage);
@@ -78,8 +94,7 @@ export async function GET(req: Request) {
       snap = await db
         .collection("aiThreads")
         .where("uid", "==", uid)
-        .where("courseId", "==", courseId)
-        .where("lessonId", "==", lessonId)
+        .where("scopeKey", "==", scopeKey)
         .orderBy("updatedAt", "desc")
         .limit(10)
         .get();
@@ -90,7 +105,7 @@ export async function GET(req: Request) {
           stage,
           "firestore_missing_index",
           "Firestore query requires a composite index.",
-          "Create the aiThreads composite index for uid, courseId, lessonId, updatedAt.",
+          "Create composite index on aiThreads: uid ASC, scopeKey ASC, updatedAt DESC.",
         );
       }
       log("error", stage, { code: "threads_read_failed", message: String(err) });
@@ -98,7 +113,7 @@ export async function GET(req: Request) {
     }
 
     const threads = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    return NextResponse.json({ threads });
+    return NextResponse.json({ ok: true, threads });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal error";
     log("error", "unhandled", { message });

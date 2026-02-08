@@ -695,30 +695,30 @@ export default function AdminCourseDetailPage() {
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-sm text-neutral-500">Course</p>
+        <p className="text-sm text-[var(--muted)]">Course</p>
         <h1 className="text-2xl font-semibold">{course?.title_en || params.courseId}</h1>
       </div>
       <Card>
         <h3 className="mb-3 text-lg font-semibold">Course settings</h3>
         <form className="grid gap-3 md:grid-cols-2" onSubmit={saveCourseSettings}>
           <div>
-            <label className="text-sm font-semibold text-neutral-700">Title (KZ)</label>
+            <label className="text-sm font-semibold text-[var(--text)]">Title (KZ)</label>
             <Input value={courseForm.title_kz} onChange={(e) => setCourseForm({ ...courseForm, title_kz: e.target.value })} required />
           </div>
           <div>
-            <label className="text-sm font-semibold text-neutral-700">Title (EN)</label>
+            <label className="text-sm font-semibold text-[var(--text)]">Title (EN)</label>
             <Input value={courseForm.title_en} onChange={(e) => setCourseForm({ ...courseForm, title_en: e.target.value })} required />
           </div>
           <div className="md:col-span-2">
-            <label className="text-sm font-semibold text-neutral-700">Description (KZ)</label>
+            <label className="text-sm font-semibold text-[var(--text)]">Description (KZ)</label>
             <Textarea rows={3} value={courseForm.description_kz} onChange={(e) => setCourseForm({ ...courseForm, description_kz: e.target.value })} />
           </div>
           <div className="md:col-span-2">
-            <label className="text-sm font-semibold text-neutral-700">Description (EN)</label>
+            <label className="text-sm font-semibold text-[var(--text)]">Description (EN)</label>
             <Textarea rows={3} value={courseForm.description_en} onChange={(e) => setCourseForm({ ...courseForm, description_en: e.target.value })} />
           </div>
           <div>
-            <label className="text-sm font-semibold text-neutral-700">Price (KZT)</label>
+            <label className="text-sm font-semibold text-[var(--text)]">Price (KZT)</label>
             <Input type="number" value={courseForm.price} onChange={(e) => setCourseForm({ ...courseForm, price: Number(e.target.value) })} />
           </div>
           <div className="flex items-center gap-2">
@@ -728,7 +728,7 @@ export default function AdminCourseDetailPage() {
               checked={courseForm.published}
               onChange={(e) => setCourseForm({ ...courseForm, published: e.target.checked })}
             />
-            <label htmlFor="published" className="text-sm text-neutral-700">
+            <label htmlFor="published" className="text-sm text-[var(--text)]">
               Published
             </label>
           </div>
@@ -742,7 +742,7 @@ export default function AdminCourseDetailPage() {
       <Card>
         <h3 className="mb-3 text-lg font-semibold">AI Policy</h3>
         <div className="grid gap-3 md:grid-cols-2">
-          <label className="flex items-center gap-2 text-sm text-neutral-700">
+          <label className="flex items-center gap-2 text-sm text-[var(--text)]">
             <input
               type="checkbox"
               checked={aiPolicyForm.allowDirectAnswers}
@@ -750,7 +750,7 @@ export default function AdminCourseDetailPage() {
             />
             Allow direct answers (quiz/assignment)
           </label>
-          <label className="flex items-center gap-2 text-sm text-neutral-700">
+          <label className="flex items-center gap-2 text-sm text-[var(--text)]">
             <input
               type="checkbox"
               checked={aiPolicyForm.allowFullSolutions}
@@ -759,7 +759,7 @@ export default function AdminCourseDetailPage() {
             Allow full solutions
           </label>
           <div className="space-y-1">
-            <label className="text-sm font-semibold text-neutral-700">Help style</label>
+            <label className="text-sm font-semibold text-[var(--text)]">Help style</label>
             <Select
               value={aiPolicyForm.style}
               onChange={(e) => {
@@ -772,7 +772,7 @@ export default function AdminCourseDetailPage() {
             </Select>
           </div>
           <div className="space-y-1">
-            <label className="text-sm font-semibold text-neutral-700">Max answer length (optional)</label>
+            <label className="text-sm font-semibold text-[var(--text)]">Max answer length (optional)</label>
             <Input
               type="number"
               min={0}
@@ -780,7 +780,7 @@ export default function AdminCourseDetailPage() {
               onChange={(e) => setAiPolicyForm((prev) => ({ ...prev, maxAnswerLength: Number(e.target.value || 0) }))}
             />
           </div>
-          <label className="flex items-center gap-2 text-sm text-neutral-700 md:col-span-2">
+          <label className="flex items-center gap-2 text-sm text-[var(--text)] md:col-span-2">
             <input
               type="checkbox"
               checked={aiPolicyForm.citationRequired}
@@ -795,15 +795,15 @@ export default function AdminCourseDetailPage() {
           <h3 className="mb-3 text-lg font-semibold">Add module</h3>
           <form className="space-y-3" onSubmit={createModule}>
             <div>
-              <label className="text-sm font-semibold text-neutral-700">Title (KZ)</label>
+              <label className="text-sm font-semibold text-[var(--text)]">Title (KZ)</label>
               <Input value={moduleForm.title_kz} onChange={(e) => setModuleForm({ ...moduleForm, title_kz: e.target.value })} required />
             </div>
             <div>
-              <label className="text-sm font-semibold text-neutral-700">Title (EN)</label>
+              <label className="text-sm font-semibold text-[var(--text)]">Title (EN)</label>
               <Input value={moduleForm.title_en} onChange={(e) => setModuleForm({ ...moduleForm, title_en: e.target.value })} required />
             </div>
             <div>
-              <label className="text-sm font-semibold text-neutral-700">Order</label>
+              <label className="text-sm font-semibold text-[var(--text)]">Order</label>
               <Input type="number" value={moduleForm.order} onChange={(e) => setModuleForm({ ...moduleForm, order: Number(e.target.value) })} />
             </div>
             <Button type="submit">Save module</Button>
@@ -814,7 +814,7 @@ export default function AdminCourseDetailPage() {
           <h3 className="mb-3 text-lg font-semibold">Add lesson</h3>
           <form className="grid gap-3 md:grid-cols-2" onSubmit={createLesson}>
             <div className="md:col-span-2">
-              <label className="text-sm font-semibold text-neutral-700">Module</label>
+              <label className="text-sm font-semibold text-[var(--text)]">Module</label>
               <Select
                 value={lessonForm.moduleId}
                 onChange={(e) => {
@@ -833,15 +833,15 @@ export default function AdminCourseDetailPage() {
               </Select>
             </div>
             <div>
-              <label className="text-sm font-semibold text-neutral-700">Title (KZ)</label>
+              <label className="text-sm font-semibold text-[var(--text)]">Title (KZ)</label>
               <Input value={lessonForm.title_kz} onChange={(e) => setLessonForm({ ...lessonForm, title_kz: e.target.value })} required />
             </div>
             <div>
-              <label className="text-sm font-semibold text-neutral-700">Title (EN)</label>
+              <label className="text-sm font-semibold text-[var(--text)]">Title (EN)</label>
               <Input value={lessonForm.title_en} onChange={(e) => setLessonForm({ ...lessonForm, title_en: e.target.value })} required />
             </div>
             <div>
-              <label className="text-sm font-semibold text-neutral-700">Type</label>
+              <label className="text-sm font-semibold text-[var(--text)]">Type</label>
               <Select value={lessonForm.type} onChange={(e) => setLessonForm({ ...lessonForm, type: e.target.value as Lesson["type"] })}>
                 <option value="video">video</option>
                 <option value="text">text</option>
@@ -850,19 +850,19 @@ export default function AdminCourseDetailPage() {
               </Select>
             </div>
             <div>
-              <label className="text-sm font-semibold text-neutral-700">Order</label>
+              <label className="text-sm font-semibold text-[var(--text)]">Order</label>
               <Input type="number" value={lessonForm.order} onChange={(e) => setLessonForm({ ...lessonForm, order: Number(e.target.value) })} />
             </div>
             <div className="md:col-span-2">
-              <label className="text-sm font-semibold text-neutral-700">Content (KZ)</label>
+              <label className="text-sm font-semibold text-[var(--text)]">Content (KZ)</label>
               <Textarea rows={3} value={lessonForm.content_kz} onChange={(e) => setLessonForm({ ...lessonForm, content_kz: e.target.value })} />
             </div>
             <div className="md:col-span-2">
-              <label className="text-sm font-semibold text-neutral-700">Content (EN)</label>
+              <label className="text-sm font-semibold text-[var(--text)]">Content (EN)</label>
               <Textarea rows={3} value={lessonForm.content_en} onChange={(e) => setLessonForm({ ...lessonForm, content_en: e.target.value })} />
             </div>
             <div className="md:col-span-2">
-              <label className="text-sm font-semibold text-neutral-700">Video URL</label>
+              <label className="text-sm font-semibold text-[var(--text)]">Video URL</label>
               <Input value={lessonForm.videoUrl} onChange={(e) => setLessonForm({ ...lessonForm, videoUrl: e.target.value })} />
             </div>
             <div className="md:col-span-2">
@@ -875,7 +875,7 @@ export default function AdminCourseDetailPage() {
           <h3 className="mb-3 text-lg font-semibold">Add assignment</h3>
           <form className="space-y-3" onSubmit={createAssignmentEntry}>
             <div>
-              <label className="text-sm font-semibold text-neutral-700">Lesson</label>
+              <label className="text-sm font-semibold text-[var(--text)]">Lesson</label>
               <Select value={assignmentForm.lessonId} onChange={(e) => setAssignmentForm({ ...assignmentForm, lessonId: e.target.value })} required>
                 <option value="">Select lesson</option>
                 {modules.flatMap((m) => lessons[m.id] || []).map((lesson) => (
@@ -886,15 +886,15 @@ export default function AdminCourseDetailPage() {
               </Select>
             </div>
             <div>
-              <label className="text-sm font-semibold text-neutral-700">Title (KZ)</label>
+              <label className="text-sm font-semibold text-[var(--text)]">Title (KZ)</label>
               <Input value={assignmentForm.title_kz} onChange={(e) => setAssignmentForm({ ...assignmentForm, title_kz: e.target.value })} required />
             </div>
             <div>
-              <label className="text-sm font-semibold text-neutral-700">Title (EN)</label>
+              <label className="text-sm font-semibold text-[var(--text)]">Title (EN)</label>
               <Input value={assignmentForm.title_en} onChange={(e) => setAssignmentForm({ ...assignmentForm, title_en: e.target.value })} required />
             </div>
             <div>
-              <label className="text-sm font-semibold text-neutral-700">Instructions (KZ)</label>
+              <label className="text-sm font-semibold text-[var(--text)]">Instructions (KZ)</label>
               <Textarea
                 rows={3}
                 value={assignmentForm.instructions_kz}
@@ -903,7 +903,7 @@ export default function AdminCourseDetailPage() {
               />
             </div>
             <div>
-              <label className="text-sm font-semibold text-neutral-700">Instructions (EN)</label>
+              <label className="text-sm font-semibold text-[var(--text)]">Instructions (EN)</label>
               <Textarea
                 rows={3}
                 value={assignmentForm.instructions_en}
@@ -920,11 +920,11 @@ export default function AdminCourseDetailPage() {
         <h3 className="mb-3 text-lg font-semibold">Modules</h3>
         <div className="space-y-3">
           {modules.map((m) => (
-            <div key={m.id} className="rounded-lg border border-neutral-100 bg-neutral-50 p-3">
+            <div key={m.id} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-semibold">{m.title_en}</p>
-                  <span className="text-xs text-neutral-500">Order {m.order}</span>
+                  <span className="text-xs text-[var(--muted)]">Order {m.order}</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs">
                   <Button size="sm" variant="ghost" onClick={() => moveModule(modules.indexOf(m), "up")}>
@@ -943,11 +943,11 @@ export default function AdminCourseDetailPage() {
               </div>
               <div className="mt-2 space-y-2">
                 {(lessons[m.id] || []).map((lesson, lessonIndex) => (
-                  <div key={lesson.id} className="rounded-md bg-white px-3 py-2 text-sm shadow-sm">
+                  <div key={lesson.id} className="rounded-md bg-[var(--card)] px-3 py-2 text-sm shadow-sm">
                     <div className="flex items-center justify-between">
                       <div>
                         <span>{lesson.title_en}</span>
-                        <span className="ml-2 text-xs text-neutral-500">{lesson.type}</span>
+                        <span className="ml-2 text-xs text-[var(--muted)]">{lesson.type}</span>
                       </div>
                       <div className="flex items-center gap-2 text-xs">
                         <Button size="sm" variant="ghost" onClick={() => moveLesson(m.id, lessonIndex, "up")}>
@@ -964,7 +964,7 @@ export default function AdminCourseDetailPage() {
                         </Button>
                       </div>
                     </div>
-                    <div className="mt-2 space-y-2 text-xs text-neutral-600">
+                    <div className="mt-2 space-y-2 text-xs text-[var(--muted)]">
                       {lesson.attachments && lesson.attachments.length > 0 ? (
                         <ul className="space-y-1">
                           {lesson.attachments.map((att) => (
@@ -992,16 +992,16 @@ export default function AdminCourseDetailPage() {
                           onChange={(e) => handleUploadAttachment(lesson.id, e.target.files?.[0])}
                           disabled={attachmentBusy === lesson.id}
                         />
-                        {attachmentBusy === lesson.id && <span className="text-[11px] text-neutral-500">Uploading...</span>}
+                        {attachmentBusy === lesson.id && <span className="text-[11px] text-[var(--muted)]">Uploading...</span>}
                       </div>
 
-                      <div className="mt-3 space-y-2 rounded-md border border-neutral-100 bg-white p-3">
+                      <div className="mt-3 space-y-2 rounded-md border border-[var(--border)] bg-[var(--card)] p-3">
                         <div className="flex items-center justify-between">
-                          <p className="text-xs font-semibold uppercase text-neutral-500">Resources</p>
+                          <p className="text-xs font-semibold uppercase text-[var(--muted)]">Resources</p>
                           {resourceErrors[lesson.id] && <span className="text-[11px] text-red-600">{resourceErrors[lesson.id]}</span>}
                         </div>
                         {lesson.resources && lesson.resources.length > 0 ? (
-                          <ul className="space-y-1 text-xs text-neutral-700">
+                          <ul className="space-y-1 text-xs text-[var(--text)]">
                             {lesson.resources.map((res, idx) => {
                               const resourceLink = res.downloadUrl || res.url;
                               return (
@@ -1017,7 +1017,7 @@ export default function AdminCourseDetailPage() {
                                   </div>
                                   <div className="flex items-center gap-2">
                                     {resourceLink && (
-                                      <a className="text-blue-700" href={resourceLink} target="_blank" rel="noreferrer">
+                                      <a className="text-[var(--text)]" href={resourceLink} target="_blank" rel="noreferrer">
                                         Open
                                       </a>
                                     )}
@@ -1030,7 +1030,7 @@ export default function AdminCourseDetailPage() {
                             })}
                           </ul>
                         ) : (
-                          <p className="text-xs text-neutral-500">No resources</p>
+                          <p className="text-xs text-[var(--muted)]">No resources</p>
                         )}
                         <div className="space-y-2 text-xs">
                           <div className="flex items-center gap-2">
@@ -1083,9 +1083,9 @@ export default function AdminCourseDetailPage() {
                       </div>
 
                       {lesson.type === "quiz" && (
-                        <div className="mt-3 space-y-2 rounded-md border border-neutral-100 bg-white p-3">
+                        <div className="mt-3 space-y-2 rounded-md border border-[var(--border)] bg-[var(--card)] p-3">
                           <div className="flex items-center justify-between">
-                            <p className="text-xs font-semibold uppercase text-neutral-500">Quiz/Test</p>
+                            <p className="text-xs font-semibold uppercase text-[var(--muted)]">Quiz/Test</p>
                             <div className="flex items-center gap-2">
                               {quizErrors[lesson.id] && <span className="text-[11px] text-red-600">{quizErrors[lesson.id]}</span>}
                               {!quizDrafts[lesson.id] && (
@@ -1119,7 +1119,7 @@ export default function AdminCourseDetailPage() {
                                       value={draft.passPercent ?? 0}
                                       onChange={(e) => updateQuizDraft(lesson.id, { passPercent: Number(e.target.value) })}
                                     />
-                                    <div className="flex items-center gap-2 text-[11px] text-neutral-500">
+                                    <div className="flex items-center gap-2 text-[11px] text-[var(--muted)]">
                                       Total points: {totalPoints}
                                     </div>
                                   </div>
@@ -1139,7 +1139,7 @@ export default function AdminCourseDetailPage() {
                                   </div>
                                   <div className="space-y-3">
                                     {orderedQuestions.map((q, idx) => (
-                                      <div key={q.id} className="rounded-md border border-neutral-200 p-2">
+                                      <div key={q.id} className="rounded-md border border-[var(--border)] p-2">
                                         <div className="flex flex-wrap items-center justify-between gap-2">
                                           <p className="text-xs font-semibold">Question {idx + 1}</p>
                                           <div className="flex items-center gap-2">
@@ -1265,7 +1265,7 @@ export default function AdminCourseDetailPage() {
                                           <div className="mt-2 space-y-3">
                                             <div className="grid gap-3 md:grid-cols-2">
                                               <div className="space-y-2">
-                                                <p className="text-[11px] uppercase text-neutral-500">Left</p>
+                                                <p className="text-[11px] uppercase text-[var(--muted)]">Left</p>
                                                 {q.left.map((item) => (
                                                   <div key={item.id} className="grid gap-2 md:grid-cols-[1fr,1fr,60px]">
                                                     <Input
@@ -1288,7 +1288,7 @@ export default function AdminCourseDetailPage() {
                                                 </Button>
                                               </div>
                                               <div className="space-y-2">
-                                                <p className="text-[11px] uppercase text-neutral-500">Right</p>
+                                                <p className="text-[11px] uppercase text-[var(--muted)]">Right</p>
                                                 {q.right.map((item) => (
                                                   <div key={item.id} className="grid gap-2 md:grid-cols-[1fr,1fr,60px]">
                                                     <Input
@@ -1312,7 +1312,7 @@ export default function AdminCourseDetailPage() {
                                               </div>
                                             </div>
                                             <div className="space-y-2">
-                                              <p className="text-[11px] uppercase text-neutral-500">Correct pairs</p>
+                                              <p className="text-[11px] uppercase text-[var(--muted)]">Correct pairs</p>
                                               {q.left.map((item) => {
                                                 const selected = q.correctPairs.find((pair) => pair.leftId === item.id)?.rightId || "";
                                                 return (
@@ -1351,11 +1351,11 @@ export default function AdminCourseDetailPage() {
                     </div>
                   </div>
                 ))}
-                {(lessons[m.id] || []).length === 0 && <p className="text-xs text-neutral-500">No lessons.</p>}
+                {(lessons[m.id] || []).length === 0 && <p className="text-xs text-[var(--muted)]">No lessons.</p>}
               </div>
             </div>
           ))}
-          {modules.length === 0 && <p className="text-sm text-neutral-600">No modules yet.</p>}
+          {modules.length === 0 && <p className="text-sm text-[var(--muted)]">No modules yet.</p>}
         </div>
       </Card>
     </div>

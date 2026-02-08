@@ -55,22 +55,22 @@ export default function CoursesPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
       <div className="mb-6 flex flex-col gap-2">
-        <p className="text-sm font-semibold text-blue-700">{t("courses.label")}</p>
+        <p className="text-sm font-semibold text-[var(--text)]">{t("courses.label")}</p>
         <h1 className="text-3xl font-semibold">{t("courses.title")}</h1>
-        <p className="text-sm text-neutral-600">{t("courses.subtitle")}</p>
+        <p className="text-sm text-[var(--muted)]">{t("courses.subtitle")}</p>
       </div>
       {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
       <div className="grid gap-4 md:grid-cols-2">
         {courses.map((course) => (
           <Card key={course.id} className="flex flex-col gap-3">
             <div className="flex items-center justify-between">
-              <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">{course.tags?.join(" • ")}</span>
-              <span className="text-sm text-neutral-500">
+              <span className="rounded-full bg-[var(--surface)] px-3 py-1 text-xs font-semibold text-[var(--text)]">{course.tags?.join(" • ")}</span>
+              <span className="text-sm text-[var(--muted)]">
                 {course.durationWeeks} {t("course.durationWeeks")}
               </span>
             </div>
             <h2 className="text-xl font-semibold">{pickLang(course.title_kz, course.title_en, lang)}</h2>
-            <p className="text-sm text-neutral-600">{pickLang(course.description_kz, course.description_en, lang)}</p>
+            <p className="text-sm text-[var(--muted)]">{pickLang(course.description_kz, course.description_en, lang)}</p>
             <div className="flex items-center gap-2">
               <Link href={`/courses/${course.id}`}>
                 <Button size="sm">{t("home.details")}</Button>
@@ -97,7 +97,7 @@ export default function CoursesPage() {
             </div>
           </Card>
         ))}
-        {courses.length === 0 && <p className="text-sm text-neutral-600">{t("courses.none")}</p>}
+        {courses.length === 0 && <p className="text-sm text-[var(--muted)]">{t("courses.none")}</p>}
       </div>
     </div>
   );

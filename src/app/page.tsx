@@ -28,13 +28,12 @@ export default function Home() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-16 pt-10">
-      <section className="relative overflow-hidden rounded-3xl border border-neutral-200 bg-white px-6 py-10 shadow-sm md:px-12 md:py-16">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,#e0f2fe,transparent_35%),radial-gradient(circle_at_80%_0%,#dbeafe,transparent_30%)]" />
+      <section className="relative overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--card)] px-6 py-10 shadow-sm md:px-12 md:py-16">
         <div className="relative grid gap-8 md:grid-cols-2 md:items-center">
           <div className="space-y-5">
             <Badge>{t("home.welcomeBadge")}</Badge>
             <h1 className="text-4xl font-semibold leading-tight md:text-5xl">{t("home.heroTitle")}</h1>
-            <p className="max-w-2xl text-lg text-neutral-700">{t("home.heroSubtitle")}</p>
+            <p className="max-w-2xl text-lg text-[var(--muted)]">{t("home.heroSubtitle")}</p>
             <div className="flex flex-wrap gap-3">
               <Link href="/courses">
                 <Button>{t("buttons.browseCourses")}</Button>
@@ -47,9 +46,9 @@ export default function Home() {
             </div>
           </div>
           <div className="relative">
-            <div className="rounded-2xl border border-blue-100 bg-blue-50 p-6 shadow-inner">
-              <p className="text-sm font-semibold text-blue-800">{t("home.cohortTitle")}</p>
-              <ul className="mt-3 space-y-2 text-sm text-blue-900">
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6">
+              <p className="text-sm font-semibold text-[var(--text)]">{t("home.cohortTitle")}</p>
+              <ul className="mt-3 space-y-2 text-sm text-[var(--muted)]">
                 <li>• {t("home.cohortItems.manualPayment")}</li>
                 <li>• {t("home.cohortItems.homework")}</li>
                 <li>• {t("home.cohortItems.enrollmentGate")}</li>
@@ -63,7 +62,7 @@ export default function Home() {
       <section className="mt-12 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-semibold">{t("home.publishedTitle")}</h2>
-          <Link href="/courses" className="text-sm font-semibold text-blue-700">
+          <Link href="/courses" className="text-sm font-semibold text-[var(--text)]">
             {t("home.viewAll")}
           </Link>
         </div>
@@ -72,14 +71,14 @@ export default function Home() {
             <Card key={course.id} className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <Badge>{course.tags?.slice(0, 3).join(" • ") || "ENT"}</Badge>
-                <span className="text-sm text-neutral-500">
+                <span className="text-sm text-[var(--muted)]">
                   {course.durationWeeks} {t("home.weeksLabel")}
                 </span>
               </div>
               <h3 className="text-xl font-semibold">
                 {pickLang(course.title_kz, course.title_en, lang)} · {course.price} {course.currency}
               </h3>
-              <p className="text-sm text-neutral-600">
+              <p className="text-sm text-[var(--muted)]">
                 {pickLang(course.description_kz, course.description_en, lang)?.slice(0, 160) ?? ""}
               </p>
               <div className="flex items-center gap-2">
@@ -102,7 +101,7 @@ export default function Home() {
               </div>
             </Card>
           ))}
-          {courses.length === 0 && <p className="text-sm text-neutral-600">{t("home.noCourses")}</p>}
+          {courses.length === 0 && <p className="text-sm text-[var(--muted)]">{t("home.noCourses")}</p>}
         </div>
       </section>
     </div>

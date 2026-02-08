@@ -41,11 +41,11 @@ const LoginForm = () => {
       <Card>
         <form className="space-y-4" onSubmit={submit}>
           <div>
-            <label className="text-sm font-medium text-neutral-700">{t("auth.email")}</label>
+            <label className="text-sm font-medium text-[var(--text)]">{t("auth.email")}</label>
             <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
           </div>
           <div>
-            <label className="text-sm font-medium text-neutral-700">{t("auth.password")}</label>
+            <label className="text-sm font-medium text-[var(--text)]">{t("auth.password")}</label>
             <Input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
@@ -54,9 +54,9 @@ const LoginForm = () => {
           </Button>
         </form>
       </Card>
-      <p className="text-sm text-neutral-600">
+      <p className="text-sm text-[var(--muted)]">
         {t("auth.noAccount")}{" "}
-        <Link className="font-semibold text-blue-700" href="/signup">
+        <Link className="font-semibold text-[var(--text)]" href="/signup">
           {t("auth.signUp")}
         </Link>
       </p>
@@ -67,7 +67,7 @@ const LoginForm = () => {
 export default function LoginPage() {
   const { t } = useI18n();
   return (
-    <Suspense fallback={<p className="px-4 py-10 text-sm text-neutral-600">{t("auth.loading")}</p>}>
+    <Suspense fallback={<p className="px-4 py-10 text-sm text-[var(--muted)]">{t("auth.loading")}</p>}>
       <LoginForm />
     </Suspense>
   );

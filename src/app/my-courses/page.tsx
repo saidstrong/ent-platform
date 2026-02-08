@@ -86,16 +86,16 @@ export default function MyCoursesPage() {
     <RequireAuth>
       <div className="mx-auto max-w-6xl px-4 py-8">
         <div className="mb-6">
-          <p className="text-xs uppercase text-neutral-500">{t("nav.myCourses")}</p>
+          <p className="text-xs uppercase text-[var(--muted)]">{t("nav.myCourses")}</p>
           <h1 className="text-2xl font-semibold">{t("myCourses.title")}</h1>
         </div>
-        {loading && <p className="text-sm text-neutral-600">{t("auth.loading")}</p>}
+        {loading && <p className="text-sm text-[var(--muted)]">{t("auth.loading")}</p>}
         {!loading && error && <p className="text-sm text-red-600">{error}</p>}
         <div className="grid gap-4 md:grid-cols-2">
           {courses.map((course) => (
             <Card key={course.id} className="space-y-2">
               <h2 className="text-lg font-semibold">{pickLang(course.title_kz, course.title_en, lang)}</h2>
-              <p className="text-sm text-neutral-600">{pickLang(course.description_kz, course.description_en, lang)}</p>
+              <p className="text-sm text-[var(--muted)]">{pickLang(course.description_kz, course.description_en, lang)}</p>
               {accessMap[course.id] === "pending" ? (
                 <Button size="sm" disabled>
                   {t("course.pendingReview")}
@@ -121,10 +121,10 @@ export default function MyCoursesPage() {
               )}
               {accessMap[course.id] === "enrolled" && (
                 continueMap[course.id]?.lessonId ? (
-                  <p className="text-xs text-neutral-500">{continueMap[course.id]?.label ?? t("course.startFromFirst")}</p>
+                  <p className="text-xs text-[var(--muted)]">{continueMap[course.id]?.label ?? t("course.startFromFirst")}</p>
                 ) : (
                   <div className="space-y-1">
-                    <p className="text-xs text-neutral-500">{t("course.noLessons")}</p>
+                    <p className="text-xs text-[var(--muted)]">{t("course.noLessons")}</p>
                     <Link href={`/learn/${course.id}`}>
                       <Button size="sm" variant="secondary">
                         {t("buttons.openCourse")}
@@ -135,7 +135,7 @@ export default function MyCoursesPage() {
               )}
             </Card>
           ))}
-          {courses.length === 0 && !loading && <p className="text-sm text-neutral-600">{t("courses.none")}</p>}
+          {courses.length === 0 && !loading && <p className="text-sm text-[var(--muted)]">{t("courses.none")}</p>}
         </div>
       </div>
     </RequireAuth>

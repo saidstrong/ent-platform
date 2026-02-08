@@ -16,6 +16,11 @@ export const extractPdfTextFromStorage = async (storagePath: string, maxPages = 
   const file = bucket.file(storagePath);
   const [metadata] = await file.getMetadata();
   const [buffer] = await file.download();
+  const { text } = await extractPdfTextFromBuffer(buffer, maxPages);
+  return { text, metadata };
+};
+
+export const extractPdfTextFromBuffer = async (buffer: Buffer, maxPages = 20) => {
   if (!(globalThis as any).DOMMatrix) {
     try {
       const polyfill = await import("dommatrix");
@@ -35,5 +40,5 @@ export const extractPdfTextFromStorage = async (storagePath: string, maxPages = 
   if (typeof parser.destroy === "function") {
     await parser.destroy();
   }
-  return { text: text.trim(), metadata };
+  return { text: text.trim() };
 };

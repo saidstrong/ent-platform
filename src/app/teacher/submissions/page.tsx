@@ -132,14 +132,14 @@ export default function TeacherSubmissionsPage() {
   );
 
   if (loading) {
-    return <p className="px-4 py-6 text-sm text-neutral-600">Loading...</p>;
+    return <p className="px-4 py-6 text-sm text-[var(--muted)]">Loading...</p>;
   }
 
   if (!user || !canAccess) {
     return (
       <Card className="m-4">
-        <p className="text-sm text-neutral-600">Access denied.</p>
-        <Link href="/" className="mt-2 inline-block text-sm text-blue-700">
+        <p className="text-sm text-[var(--muted)]">Access denied.</p>
+        <Link href="/" className="mt-2 inline-block text-sm text-[var(--text)]">
           Go back
         </Link>
       </Card>
@@ -150,22 +150,22 @@ export default function TeacherSubmissionsPage() {
     <div className="mx-auto max-w-5xl space-y-4 px-4 py-8">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase text-neutral-500">Teacher</p>
+          <p className="text-xs uppercase text-[var(--muted)]">Teacher</p>
           <h1 className="text-2xl font-semibold">Submissions inbox</h1>
-          <p className="text-xs text-neutral-500">Pending count: {pendingCount}</p>
+          <p className="text-xs text-[var(--muted)]">Pending count: {pendingCount}</p>
         </div>
-        <Link href="/teacher" className="text-sm text-blue-700">
+        <Link href="/teacher" className="text-sm text-[var(--text)]">
           Back to dashboard
         </Link>
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
-      {loadingList && <p className="text-sm text-neutral-500">Loading submissions...</p>}
+      {loadingList && <p className="text-sm text-[var(--muted)]">Loading submissions...</p>}
 
       <Card className="space-y-3">
         <div className="grid gap-3 md:grid-cols-3">
           <div className="space-y-1">
-            <label className="text-xs font-semibold uppercase text-neutral-500">Status</label>
+            <label className="text-xs font-semibold uppercase text-[var(--muted)]">Status</label>
             <div className="flex items-center gap-2">
               <Button size="sm" variant={statusFilter === "pending" ? "primary" : "secondary"} onClick={() => setStatusFilter("pending")}>
                 Pending
@@ -179,10 +179,10 @@ export default function TeacherSubmissionsPage() {
             </div>
           </div>
           <div className="space-y-1">
-            <label className="text-xs font-semibold uppercase text-neutral-500">Course ID</label>
+            <label className="text-xs font-semibold uppercase text-[var(--muted)]">Course ID</label>
             {courses.length > 0 ? (
               <select
-                className="w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm"
+                className="w-full rounded-md border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm"
                 value={courseFilter}
                 onChange={(e) => setCourseFilter(e.target.value)}
               >
@@ -198,14 +198,14 @@ export default function TeacherSubmissionsPage() {
             )}
           </div>
           <div className="space-y-1">
-            <label className="text-xs font-semibold uppercase text-neutral-500">Student</label>
+            <label className="text-xs font-semibold uppercase text-[var(--muted)]">Student</label>
             <Input value={uidFilter} onChange={(e) => setUidFilter(e.target.value)} placeholder="Search uid, name, email" />
           </div>
         </div>
       </Card>
 
       <Card className="overflow-hidden">
-        <div className="grid grid-cols-6 gap-2 border-b border-neutral-200 bg-neutral-50 px-4 py-2 text-xs font-semibold text-neutral-600">
+        <div className="grid grid-cols-6 gap-2 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-xs font-semibold text-[var(--muted)]">
           <span>Submitted</span>
           <span>Course</span>
           <span>Lesson</span>
@@ -219,16 +219,16 @@ export default function TeacherSubmissionsPage() {
             return (
               <button
                 key={s.id}
-                className="grid w-full grid-cols-6 gap-2 px-4 py-3 text-left text-sm hover:bg-neutral-50"
+                className="grid w-full grid-cols-6 gap-2 px-4 py-3 text-left text-sm hover:bg-[var(--surface)]"
                 onClick={() => router.push(`/teacher/submissions/${s.id}`)}
                 type="button"
               >
-                <span className="text-neutral-600">{formatAnyTimestamp(s.submittedAt)}</span>
-                <span className="text-neutral-700">{courses.find((c) => c.id === s.courseId)?.title_en || s.courseId || "-"}</span>
-                <span className="text-neutral-700">{s.lessonId || "-"}</span>
-                <span className="text-neutral-700">{s.assignmentId}</span>
-                <span className="text-neutral-700">{profiles[s.uid]?.displayName || profiles[s.uid]?.email || s.uid}</span>
-                <span className="text-neutral-600">
+                <span className="text-[var(--muted)]">{formatAnyTimestamp(s.submittedAt)}</span>
+                <span className="text-[var(--text)]">{courses.find((c) => c.id === s.courseId)?.title_en || s.courseId || "-"}</span>
+                <span className="text-[var(--text)]">{s.lessonId || "-"}</span>
+                <span className="text-[var(--text)]">{s.assignmentId}</span>
+                <span className="text-[var(--text)]">{profiles[s.uid]?.displayName || profiles[s.uid]?.email || s.uid}</span>
+                <span className="text-[var(--muted)]">
                   {status}
                   {s.grade !== null && s.grade !== undefined ? ` - ${s.grade}` : ""}
                 </span>
@@ -236,18 +236,18 @@ export default function TeacherSubmissionsPage() {
             );
           })}
           {filteredSubmissions.length === 0 && !loadingList && (
-            <p className="px-4 py-3 text-sm text-neutral-600">No submissions found.</p>
+            <p className="px-4 py-3 text-sm text-[var(--muted)]">No submissions found.</p>
           )}
         </div>
       </Card>
 
       <Card className="overflow-hidden">
-        <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50 px-4 py-2">
-          <p className="text-xs font-semibold text-neutral-600">Recent quiz attempts</p>
-          {quizLoading && <span className="text-xs text-neutral-500">Loading...</span>}
+        <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2">
+          <p className="text-xs font-semibold text-[var(--muted)]">Recent quiz attempts</p>
+          {quizLoading && <span className="text-xs text-[var(--muted)]">Loading...</span>}
         </div>
         {quizError && <p className="px-4 py-3 text-xs text-red-600">{quizError}</p>}
-        <div className="grid grid-cols-5 gap-2 border-b border-neutral-200 px-4 py-2 text-xs font-semibold text-neutral-600">
+        <div className="grid grid-cols-5 gap-2 border-b border-[var(--border)] px-4 py-2 text-xs font-semibold text-[var(--muted)]">
           <span>Submitted</span>
           <span>Course</span>
           <span>Lesson</span>
@@ -257,17 +257,17 @@ export default function TeacherSubmissionsPage() {
         <div className="divide-y divide-neutral-100">
           {quizAttempts.map((attempt) => (
             <div key={attempt.id} className="grid grid-cols-5 gap-2 px-4 py-3 text-sm">
-              <span className="text-neutral-600">{formatAnyTimestamp(attempt.submittedAt)}</span>
-              <span className="text-neutral-700">{courses.find((c) => c.id === attempt.courseId)?.title_en || attempt.courseId}</span>
-              <span className="text-neutral-700">{attempt.lessonId}</span>
-              <span className="text-neutral-700">{profiles[attempt.uid]?.displayName || profiles[attempt.uid]?.email || attempt.uid}</span>
-              <span className="text-neutral-700">
+              <span className="text-[var(--muted)]">{formatAnyTimestamp(attempt.submittedAt)}</span>
+              <span className="text-[var(--text)]">{courses.find((c) => c.id === attempt.courseId)?.title_en || attempt.courseId}</span>
+              <span className="text-[var(--text)]">{attempt.lessonId}</span>
+              <span className="text-[var(--text)]">{profiles[attempt.uid]?.displayName || profiles[attempt.uid]?.email || attempt.uid}</span>
+              <span className="text-[var(--text)]">
                 {attempt.pointsEarned}/{attempt.pointsMax} ({attempt.percent}%)
               </span>
             </div>
           ))}
           {!quizLoading && quizAttempts.length === 0 && (
-            <p className="px-4 py-3 text-sm text-neutral-600">No quiz attempts yet.</p>
+            <p className="px-4 py-3 text-sm text-[var(--muted)]">No quiz attempts yet.</p>
           )}
         </div>
       </Card>

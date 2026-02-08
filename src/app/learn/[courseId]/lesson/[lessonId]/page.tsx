@@ -272,9 +272,9 @@ export default function LessonPage() {
     const linkUrl = resource.downloadUrl || resource.url;
     if (resource.kind === "note") {
       return (
-        <details className="rounded-md border border-neutral-200 bg-neutral-50 p-3 text-sm">
+        <details className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 text-sm">
           <summary className="cursor-pointer font-semibold">{resource.name}</summary>
-          <p className="mt-2 whitespace-pre-wrap text-neutral-700">{resource.text}</p>
+          <p className="mt-2 whitespace-pre-wrap text-[var(--text)]">{resource.text}</p>
         </details>
       );
     }
@@ -289,10 +289,10 @@ export default function LessonPage() {
       if (embedUrl) {
         return (
           <div className="space-y-2">
-            <div className="aspect-video w-full overflow-hidden rounded-xl bg-neutral-100">
+            <div className="aspect-video w-full overflow-hidden rounded-xl bg-[var(--surface)]">
               <iframe className="h-full w-full" src={embedUrl} title={resource.name} allowFullScreen />
             </div>
-            <a className="text-sm text-blue-700" href={linkUrl || ""} target="_blank" rel="noreferrer">
+            <a className="text-sm text-[var(--text)]" href={linkUrl || ""} target="_blank" rel="noreferrer">
               {t("lesson.openOnYouTube")}
             </a>
           </div>
@@ -301,17 +301,17 @@ export default function LessonPage() {
     }
     return (
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-neutral-700">{resource.name}</span>
+        <span className="text-[var(--text)]">{resource.name}</span>
         {resource.contentType && (
-          <span className="rounded-full bg-neutral-100 px-2 py-1 text-[11px] text-neutral-600">{resource.contentType}</span>
+          <span className="rounded-full bg-[var(--surface)] px-2 py-1 text-[11px] text-[var(--muted)]">{resource.contentType}</span>
         )}
         {linkUrl && (
           <>
-            <a className="text-blue-700" href={linkUrl} target="_blank" rel="noreferrer">
+            <a className="text-[var(--text)]" href={linkUrl} target="_blank" rel="noreferrer">
               {t("buttons.open")}
             </a>
             {resource.kind === "file" && (
-              <a className="text-blue-700" href={linkUrl} target="_blank" rel="noreferrer" download>
+              <a className="text-[var(--text)]" href={linkUrl} target="_blank" rel="noreferrer" download>
                 {t("buttons.download")}
               </a>
             )}
@@ -357,30 +357,30 @@ export default function LessonPage() {
     <RequireEnrollment courseId={params.courseId}>
       <div className="mx-auto max-w-5xl px-4 py-8">
         <div className="mb-4">
-        <Link href={`/learn/${params.courseId}`} className="text-sm text-blue-700">
+        <Link href={`/learn/${params.courseId}`} className="text-sm text-[var(--text)]">
           &lt; {t("buttons.backToCourse")}
         </Link>
         <h1 className="text-3xl font-semibold">{lesson ? pickLang(lesson.title_kz, lesson.title_en, lang) : t("lesson.title")}</h1>
-          {course && <p className="text-sm text-neutral-600">{pickLang(course.title_kz, course.title_en, lang)}</p>}
+          {course && <p className="text-sm text-[var(--muted)]">{pickLang(course.title_kz, course.title_en, lang)}</p>}
         </div>
         <div className="grid gap-4 lg:grid-cols-[1fr,320px]">
           <Card className="space-y-4">
-            {loadingLesson && <p className="text-sm text-neutral-600">{t("lesson.loading")}</p>}
-            {!loadingLesson && !lesson && <p className="text-sm text-neutral-600">{t("lesson.notFound")}</p>}
+            {loadingLesson && <p className="text-sm text-[var(--muted)]">{t("lesson.loading")}</p>}
+            {!loadingLesson && !lesson && <p className="text-sm text-[var(--muted)]">{t("lesson.notFound")}</p>}
             {lesson?.type === "video" && lesson.videoUrl && (
               (() => {
                 const embedUrl = getYouTubeEmbedUrl(lesson.videoUrl);
                 if (embedUrl) {
                   return (
-                    <div className="aspect-video w-full overflow-hidden rounded-xl bg-neutral-100">
+                    <div className="aspect-video w-full overflow-hidden rounded-xl bg-[var(--surface)]">
                       <iframe className="h-full w-full" src={embedUrl} title={lesson.title_en} allowFullScreen />
                     </div>
                   );
                 }
                 return (
-                  <div className="rounded-md border border-neutral-200 bg-neutral-50 p-4 text-sm">
-                    <p className="text-neutral-700">{t("lesson.videoLink")}</p>
-                    <a className="text-blue-700" href={lesson.videoUrl} target="_blank" rel="noreferrer">
+                  <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
+                    <p className="text-[var(--text)]">{t("lesson.videoLink")}</p>
+                    <a className="text-[var(--text)]" href={lesson.videoUrl} target="_blank" rel="noreferrer">
                       {t("lesson.openVideo")}
                     </a>
                   </div>
@@ -422,20 +422,20 @@ export default function LessonPage() {
               </div>
             )}
             {lesson?.type === "quiz" && (
-              <div className="space-y-3 rounded-lg border border-neutral-200 p-4">
+              <div className="space-y-3 rounded-lg border border-[var(--border)] p-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-semibold">{t("lesson.quizTitle")}</p>
                     {quizCompleted && quizAttempt && (
-                      <p className="text-xs text-neutral-600">
+                      <p className="text-xs text-[var(--muted)]">
                         {t("lesson.score")}: {quizAttempt.pointsEarned}/{quizAttempt.pointsMax} ({quizAttempt.percent}%)
                       </p>
                     )}
                   </div>
                   {quizError && <span className="text-xs text-red-600">{quizError}</span>}
                 </div>
-                {!user && <p className="text-sm text-neutral-600">{t("lesson.signInQuiz")}</p>}
-                {user && !quizReady && <p className="text-sm text-neutral-600">{t("lesson.noQuiz")}</p>}
+                {!user && <p className="text-sm text-[var(--muted)]">{t("lesson.signInQuiz")}</p>}
+                {user && !quizReady && <p className="text-sm text-[var(--muted)]">{t("lesson.noQuiz")}</p>}
                 {user && quizReady && quiz && (
                   <div className="space-y-4">
                     {quiz.questions.map((question) => {
@@ -447,7 +447,7 @@ export default function LessonPage() {
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <p className="text-sm font-medium">{prompt}</p>
                             {quizCompleted && result && (
-                              <span className="text-xs text-neutral-600">
+                              <span className="text-xs text-[var(--muted)]">
                                 {result.earnedPoints}/{result.maxPoints} {result.isCorrect ? t("lesson.correct") : t("lesson.checkedLabel")}
                               </span>
                             )}
@@ -458,7 +458,7 @@ export default function LessonPage() {
                               {question.options.map((opt) => {
                                 const isSelected = selectedAnswer?.type === "single" && selectedAnswer.optionId === opt.id;
                                 return (
-                                  <label key={opt.id} className="flex items-center gap-2 text-sm text-neutral-700">
+                                  <label key={opt.id} className="flex items-center gap-2 text-sm text-[var(--text)]">
                                     <input
                                       type="radio"
                                       name={`q-${question.id}`}
@@ -473,7 +473,7 @@ export default function LessonPage() {
                                     />
                                     <span>{pickLang(opt.text_kz, opt.text_en, lang)}</span>
                                     {opt.imageUrl && (
-                                      <a className="text-xs text-blue-700" href={opt.imageUrl} target="_blank" rel="noreferrer">
+                                      <a className="text-xs text-[var(--text)]" href={opt.imageUrl} target="_blank" rel="noreferrer">
                                         {t("lesson.image")}
                                       </a>
                                     )}
@@ -488,7 +488,7 @@ export default function LessonPage() {
                                 const current = selectedAnswer?.type === "multi" ? selectedAnswer.optionIds : [];
                                 const checked = current.includes(opt.id);
                                 return (
-                                  <label key={opt.id} className="flex items-center gap-2 text-sm text-neutral-700">
+                                  <label key={opt.id} className="flex items-center gap-2 text-sm text-[var(--text)]">
                                     <input
                                       type="checkbox"
                                       checked={checked}
@@ -510,7 +510,7 @@ export default function LessonPage() {
                                     />
                                     <span>{pickLang(opt.text_kz, opt.text_en, lang)}</span>
                                     {opt.imageUrl && (
-                                      <a className="text-xs text-blue-700" href={opt.imageUrl} target="_blank" rel="noreferrer">
+                                      <a className="text-xs text-[var(--text)]" href={opt.imageUrl} target="_blank" rel="noreferrer">
                                         {t("lesson.image")}
                                       </a>
                                     )}
@@ -539,7 +539,7 @@ export default function LessonPage() {
                                 const value = pairs[leftItem.id] || "";
                                 return (
                                   <div key={leftItem.id} className="grid gap-2 md:grid-cols-[1fr,1fr]">
-                                    <span className="text-sm text-neutral-700">{pickLang(leftItem.text_kz, leftItem.text_en, lang)}</span>
+                                    <span className="text-sm text-[var(--text)]">{pickLang(leftItem.text_kz, leftItem.text_en, lang)}</span>
                                     <Select
                                       value={value}
                                       disabled={quizCompleted}
@@ -573,7 +573,7 @@ export default function LessonPage() {
                         {quizSubmitting ? t("lesson.submitting") : t("lesson.submitQuiz")}
                       </Button>
                     )}
-                    {quizCompleted && <p className="text-xs text-neutral-500">{t("lesson.quizSubmitted")}</p>}
+                    {quizCompleted && <p className="text-xs text-[var(--muted)]">{t("lesson.quizSubmitted")}</p>}
                   </div>
                 )}
               </div>
@@ -609,7 +609,7 @@ export default function LessonPage() {
                   <Button fullWidth>{t("buttons.goToHomework")}</Button>
                 </Link>
               ) : (
-                <p className="text-sm text-neutral-600">{t("lesson.noHomework")}</p>
+                <p className="text-sm text-[var(--muted)]">{t("lesson.noHomework")}</p>
               )}
             </div>
           </Card>
@@ -617,19 +617,19 @@ export default function LessonPage() {
             <Card className="space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs uppercase text-neutral-500">{t("lesson.syllabusTitle")}</p>
-                  <p className="text-sm text-neutral-700">{t("lesson.modulesLessons")}</p>
+                  <p className="text-xs uppercase text-[var(--muted)]">{t("lesson.syllabusTitle")}</p>
+                  <p className="text-sm text-[var(--text)]">{t("lesson.modulesLessons")}</p>
                 </div>
                 <Button variant="secondary" size="sm" onClick={() => router.push(`/learn/${params.courseId}`)}>
                   {t("buttons.backToCourse")}
                 </Button>
               </div>
               {modules.length === 0 && (
-                <p className="text-sm text-neutral-600">{t("course.noLessons")}</p>
+                <p className="text-sm text-[var(--muted)]">{t("course.noLessons")}</p>
               )}
               <div className="space-y-3">
                 {modules.map((mod) => (
-                  <div key={mod.id} className="rounded-lg border border-neutral-100 bg-neutral-50 p-3">
+                  <div key={mod.id} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
                     <p className="text-sm font-semibold">{pickLang(mod.title_kz, mod.title_en, lang)}</p>
                     <div className="mt-2 space-y-2">
                       {(lessonsByModule[mod.id] || []).map((item) => {
@@ -642,18 +642,18 @@ export default function LessonPage() {
                             disabled={!canAccessContent}
                             onClick={() => router.push(`/learn/${params.courseId}/lesson/${item.id}`)}
                             className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm ${
-                              isCurrent ? "bg-blue-50 text-blue-700" : "bg-white text-neutral-700"
+                              isCurrent ? "bg-[var(--surface)] text-[var(--text)]" : "bg-[var(--card)] text-[var(--text)]"
                             }`}
                           >
                             <span>{pickLang(item.title_kz, item.title_en, lang)}</span>
-                            <span className={`text-xs font-semibold ${isCompleted ? "text-green-700" : "text-neutral-500"}`}>
+                            <span className={`text-xs font-semibold ${isCompleted ? "text-green-700" : "text-[var(--muted)]"}`}>
                               {isCompleted ? t("buttons.completed") : t("lesson.notCompleted")}
                             </span>
                           </button>
                         );
                       })}
                       {(lessonsByModule[mod.id] || []).length === 0 && (
-                        <p className="text-xs text-neutral-500">{t("course.noLessons")}</p>
+                        <p className="text-xs text-[var(--muted)]">{t("course.noLessons")}</p>
                       )}
                     </div>
                   </div>

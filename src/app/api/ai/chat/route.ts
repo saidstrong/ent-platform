@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import admin from "firebase-admin";
 import { getAdminServicesSafe } from "../../../../lib/firebase-admin";
-import { extractPdfTextFromStorage } from "../../../../lib/pdf-text-extract";
+import { extractPdfTextFromBuffer, extractPdfTextFromStorage } from "../../../../lib/pdf-text-extract";
 import { createHash } from "crypto";
+import fs from "fs";
+import path from "path";
 
 export const runtime = "nodejs";
 
@@ -11,7 +13,7 @@ const MONTHLY_TOKEN_LIMIT = 120000;
 const OPENAI_MODEL = "gpt-4.1-mini";
 
 type SourceEntry = {
-  type: "pdf" | "course";
+  type: "pdf" | "course" | "youtube";
   title: string;
   docId?: string;
   pages?: number[] | { from: number; to: number };
@@ -51,9 +53,42 @@ const extractReply = (data: any) => {
 
 const pickText = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 
-const buildContextPack = (course: any | null, lesson: any | null, lang: string) => {
+const PLATFORM_CONTEXT =
+  "XY-School is a bilingual (EN/KZ) learning platform. Roles: Student (learn courses), Teacher (create/manage lessons), Admin (support). Support contact: Said Amanzhol, +77075214911, amanzhol.said08@gmail.com, Telegram @sherlockzini.";
+
+const isPlatformQuestion = (input: string) => {
+  const text = input.toLowerCase();
+  return /xy-school|platform|support|contact|admin|teacher|student|dashboard|login|signup|register|enroll|course catalog|available courses|how to use|how do i/.test(
+    text,
+  );
+};
+
+
+const getPlatformHandbook = () => {
+  try {
+    const handbookPath = path.join(process.cwd(), "docs", "platform-handbook.md");
+    const raw = fs.readFileSync(handbookPath, "utf-8");
+    return raw.trim();
+  } catch {
+    return "";
+  }
+};
+
+const buildContextPack = (
+  course: any | null,
+  lesson: any | null,
+  lang: string,
+  includePlatform: boolean,
+  includeCourseContext: boolean,
+  includeLessonContext: boolean,
+) => {
   const parts: string[] = [];
   const sources: string[] = [];
+  const handbook = getPlatformHandbook() || PLATFORM_CONTEXT;
+  if (includePlatform && handbook) {
+    parts.push(`Platform: ${handbook}`.trim());
+    sources.push("Platform handbook");
+  }
   const courseTitle = pickText(course?.title_en) || pickText(course?.title_kz);
   const courseDesc =
     pickText(course?.description_en) ||
@@ -63,18 +98,18 @@ const buildContextPack = (course: any | null, lesson: any | null, lang: string) 
     pickText(course?.syllabus_en) ||
     pickText(course?.syllabus_kz);
   const courseContextUsed = !!(courseTitle || courseDesc);
-  if (courseContextUsed) {
+  if (includeCourseContext && courseContextUsed) {
     parts.push(`Course: ${courseTitle}\nDetails: ${courseDesc}`.trim());
     sources.push("Course metadata");
   }
 
   const lessonTitle = pickText(lesson?.title_en) || pickText(lesson?.title_kz);
-  if (lessonTitle) {
+  if (includeLessonContext && lessonTitle) {
     parts.push(`Lesson: ${lessonTitle}`.trim());
   }
 
-  const aiContextKz = pickText(lesson?.aiContext?.kz);
-  const aiContextEn = pickText(lesson?.aiContext?.en);
+  const aiContextKz = includeLessonContext ? pickText(lesson?.aiContext?.kz) : "";
+  const aiContextEn = includeLessonContext ? pickText(lesson?.aiContext?.en) : "";
   let contextBody = "";
   let contextLabel = "";
   if (lang === "kz") {
@@ -96,6 +131,54 @@ const buildContextPack = (course: any | null, lesson: any | null, lang: string) 
     hasLessonContext: !!contextBody,
     courseContextUsed,
   };
+};
+
+const buildSourcesSummary = (sources: SourceEntry[]) => {
+  if (!sources.length) return "";
+  const parts = sources.map((entry) => {
+    if (entry.type === "course") return entry.title || "Course metadata";
+    if (entry.type === "youtube") return `YouTube transcript: ${entry.title}`;
+    const excerptIds = entry.excerptIds ? [...new Set(entry.excerptIds)].sort((a, b) => a - b) : [];
+    if (entry.pages && typeof entry.pages === "object" && "from" in entry.pages && "to" in entry.pages) {
+      const pages = `${entry.pages.from}-${entry.pages.to}`;
+      return excerptIds.length
+        ? `${entry.title} (pages: ${pages}; excerpts: ${excerptIds.join(", ")})`
+        : `${entry.title} (pages: ${pages})`;
+    }
+    if (excerptIds.length) {
+      return `${entry.title} (excerpts: ${excerptIds.join(", ")})`;
+    }
+    return entry.title;
+  });
+  return `Sources: ${parts.join("; ")}`;
+};
+
+const buildReferences = (
+  citations: string[],
+  sources: SourceEntry[],
+  citationMeta: Array<{ resourceId: string; name: string; excerpts?: number[] }>,
+) => {
+  if (!citations.length) return [];
+  const nameByResource = new Map<string, string>();
+  sources.forEach((entry) => {
+    if (entry.docId && entry.title) nameByResource.set(entry.docId, entry.title);
+  });
+  citationMeta.forEach((entry) => {
+    if (entry.resourceId && entry.name) nameByResource.set(entry.resourceId, entry.name);
+  });
+  return citations.map((id) => {
+    const [resourceId, chunkRaw] = id.split("#");
+    const name = nameByResource.get(resourceId) || "PDF";
+    const index = Number(chunkRaw);
+    const label = Number.isFinite(index) ? `excerpt ${index}` : "excerpt";
+    return { type: "pdf", title: name, label, excerptIndex: Number.isFinite(index) ? index : undefined };
+  });
+};
+
+const getScopeKey = (scope: string, courseId: string, lessonId: string) => {
+  if (scope === "lesson" && courseId && lessonId) return `lesson:${courseId}:${lessonId}`;
+  if (scope === "course" && courseId) return `course:${courseId}`;
+  return "platform";
 };
 
 const isPdfUrl = (url?: string | null) => {
@@ -604,6 +687,9 @@ export async function POST(req: NextRequest) {
     let contextType: unknown;
     let path: unknown;
     let clientRequestId: unknown;
+    let scopeBody: unknown;
+    let selectedSourcesBody: unknown;
+    let attachmentsBody: unknown;
     try {
       ({
         message,
@@ -616,11 +702,58 @@ export async function POST(req: NextRequest) {
         contextType,
         path,
         clientRequestId,
+        scope: scopeBody,
+        selectedSources: selectedSourcesBody,
+        attachments: attachmentsBody,
       } = await req.json());
     } catch (err) {
       log("warn", stage, { code: "invalid_json", message: String(err) });
       return respondError(400, stage, "invalid_json", "Invalid JSON body.");
     }
+    const selectedSources = Array.isArray(selectedSourcesBody)
+      ? selectedSourcesBody
+          .map((item: any) => ({
+            id: typeof item?.id === "string" ? item.id : "",
+            type: item?.type === "youtube" ? "youtube" : "pdf",
+            title: typeof item?.title === "string" ? item.title : "",
+          }))
+          .filter((item: any) => item.id)
+      : [];
+    const attachments = Array.isArray(attachmentsBody)
+      ? attachmentsBody
+          .map((item: any) => ({
+            id: typeof item?.id === "string" ? item.id : "",
+            name: typeof item?.name === "string" ? item.name : "attachment",
+            type: typeof item?.type === "string" ? item.type : "",
+            text: typeof item?.text === "string" ? item.text : "",
+            base64: typeof item?.base64 === "string" ? item.base64 : "",
+          }))
+          .filter((item: any) => item.name)
+      : [];
+    const scopeValue =
+      typeof scopeBody === "string" && ["lesson", "course", "platform", "auto"].includes(scopeBody)
+        ? scopeBody
+        : "auto";
+    let inferredScope =
+      scopeValue !== "auto"
+        ? scopeValue
+        : lessonId
+          ? "lesson"
+          : courseId
+            ? "course"
+            : "platform";
+    if (inferredScope === "lesson" && (!courseId || !lessonId)) {
+      stage = "context:scope_downgrade";
+      log("warn", stage, { from: "lesson", to: "platform" });
+      inferredScope = "platform";
+    }
+    stage = "context:ids";
+    log("info", stage, {
+      scope: inferredScope,
+      courseId: courseId ? String(courseId) : "",
+      lessonId: lessonId ? String(lessonId) : "",
+      selectedSources: selectedSources.length,
+    });
     if (!message || typeof message !== "string") {
       return respondError(400, stage, "invalid_message", "Message is required.");
     }
@@ -644,6 +777,8 @@ export async function POST(req: NextRequest) {
       inferredLang;
     stage = "context:lang";
     log("info", stage, { lang, source: langSource });
+    const groundedSelected = selectedSources.length > 0;
+    const assistantMode = groundedSelected ? "grounded" : "general";
 
     const now = new Date();
     const dateKey = getDateKey(now);
@@ -689,10 +824,14 @@ export async function POST(req: NextRequest) {
     stage = "context:pack";
     log("info", stage);
     const lessonData = lessonDoc?.data() || null;
+    const platformQuestion = isPlatformQuestion(message);
     const { contextText, sources, hasLessonContext, courseContextUsed } = buildContextPack(
       courseDoc?.data() || null,
       lessonData,
       lang,
+      true,
+      groundedSelected,
+      groundedSelected,
     );
 
     const policyDefault = {
@@ -774,6 +913,8 @@ export async function POST(req: NextRequest) {
     }
 
     const pdfSources: string[] = [];
+    const youtubeContextParts: string[] = [];
+    const youtubeSources: SourceEntry[] = [];
     const pdfContextParts: string[] = [];
     const MAX_PDFS = 3;
     const MAX_PDF_CHARS_TOTAL = 20000;
@@ -795,18 +936,40 @@ export async function POST(req: NextRequest) {
 
     stage = "pdf:list";
     log("info", stage);
-    const pdfResources = await getLessonPdfResources(
-      db,
-      String(courseId || ""),
-      String(lessonId || ""),
-      lessonData,
-    );
+    const selectedSourceIds = new Set(selectedSources.map((s) => s.id));
+    const pdfResources =
+      groundedSelected && inferredScope === "lesson" && lessonId
+        ? (await getLessonPdfResources(
+            db,
+            String(courseId || ""),
+            String(lessonId || ""),
+            lessonData,
+          )).filter((res) => {
+            if (selectedSourceIds.size === 0) return true;
+            const key = res.id || res.storagePath || res.downloadUrl || res.name;
+            return key ? selectedSourceIds.has(key) : false;
+          })
+        : [];
     pdfFoundCount = pdfResources.length;
     log("info", stage, {
       found: pdfFoundCount,
       lessonId: String(lessonId || ""),
       courseId: String(courseId || ""),
+      groundedSelected,
     });
+
+    if (groundedSelected && inferredScope === "lesson" && Array.isArray(lessonData?.resources)) {
+      lessonData.resources.forEach((res: any) => {
+        if (!res || res.kind !== "youtube" || !res.text) return;
+        const key = res.id || res.url || res.name;
+        if (selectedSourceIds.size > 0 && !selectedSourceIds.has(String(key || ""))) return;
+        const title = String(res.name || "YouTube transcript");
+        const text = String(res.text || "").trim();
+        if (!text) return;
+        youtubeContextParts.push(`YouTube transcript: ${title}\n${truncateText(text, 4000)}`);
+        youtubeSources.push({ type: "youtube", title });
+      });
+    }
 
     const selectedChunkIds = new Set<string>();
     const selectedChunkLabels: string[] = [];
@@ -959,10 +1122,48 @@ export async function POST(req: NextRequest) {
     stage = "pdf:attach";
     log("info", stage, { attachedCharsTotal: pdfCharsUsed, attachedPdfsCount: pdfSources.length });
 
-    const combinedContextText = [contextText, ...pdfContextParts].filter(Boolean).join("\n\n").trim();
+    const attachmentContextParts: string[] = [];
+    if (attachments.length > 0) {
+      stage = "attachment:parse";
+      log("info", stage, { count: attachments.length });
+      for (const item of attachments) {
+        const name = String(item?.name || "attachment");
+        const type = String(item?.type || "");
+        if (item?.text) {
+          const trimmed = truncateText(item.text, 8000);
+          if (trimmed) {
+            attachmentContextParts.push(`User attachment: ${name}\n${trimmed}`);
+          }
+          continue;
+        }
+        if (item?.base64 && (type.includes("pdf") || name.toLowerCase().endsWith(".pdf"))) {
+          try {
+            stage = "attachment:extract";
+            log("info", stage, { name });
+            const buffer = Buffer.from(item.base64, "base64");
+            const { text } = await extractPdfTextFromBuffer(buffer, 10);
+            const trimmed = truncateText(text || "", 8000);
+            if (trimmed) {
+              attachmentContextParts.push(`User attachment: ${name}\n${trimmed}`);
+            }
+          } catch (err) {
+            log("warn", stage, { code: "attachment_extract_failed", message: String(err) });
+          }
+        }
+      }
+    }
+
+    const combinedContextText = [contextText, ...attachmentContextParts, ...pdfContextParts, ...youtubeContextParts]
+      .filter(Boolean)
+      .join("\n\n")
+      .trim();
     const hasPdfContext = pdfContextParts.length > 0;
+    const hasYoutubeContext = youtubeContextParts.length > 0;
     const pdfUnreadable = pdfFoundCount > 0 && !hasPdfContext;
     const structuredSources: SourceEntry[] = [];
+    if (platformQuestion && sources.includes("Platform handbook")) {
+      structuredSources.push({ type: "course", title: "Platform handbook" });
+    }
     if (courseContextUsed) {
       structuredSources.push({ type: "course", title: "Course metadata" });
     }
@@ -981,7 +1182,9 @@ export async function POST(req: NextRequest) {
         pages,
       });
     });
+    youtubeSources.forEach((entry) => structuredSources.push(entry));
 
+    const scopeKey = getScopeKey(inferredScope, String(courseId || ""), String(lessonId || ""));
     const threadsRef = db.collection("aiThreads");
     let activeThreadId = typeof threadId === "string" && threadId.trim().length > 0 ? threadId.trim() : "";
     if (activeThreadId) {
@@ -995,8 +1198,7 @@ export async function POST(req: NextRequest) {
       try {
         const latestThreadSnap = await threadsRef
           .where("uid", "==", uid)
-          .where("courseId", "==", String(courseId || ""))
-          .where("lessonId", "==", String(lessonId || ""))
+          .where("scopeKey", "==", scopeKey)
           .orderBy("updatedAt", "desc")
           .limit(1)
           .get();
@@ -1010,7 +1212,7 @@ export async function POST(req: NextRequest) {
             "threads:read",
             "firestore_missing_index",
             "Firestore query requires a composite index.",
-            "Create the aiThreads composite index for uid, courseId, lessonId, updatedAt.",
+            "Create composite index on aiThreads: uid ASC, scopeKey ASC, updatedAt DESC. See docs/firestore-indexes.md.",
           );
         }
         return respondError(500, "threads:read", "threads_read_failed", "Failed to load threads.");
@@ -1023,6 +1225,7 @@ export async function POST(req: NextRequest) {
         uid,
         courseId: String(courseId || ""),
         lessonId: String(lessonId || ""),
+        scopeKey,
         title: "Lesson chat",
         createdAt: now,
         updatedAt: now,
@@ -1045,16 +1248,21 @@ export async function POST(req: NextRequest) {
             ok: true,
             answer: data.content || "",
             replyText: data.content || "",
+            answerMarkdown: data.content || "",
             usage: { input_tokens: data.inputTokens || 0, output_tokens: data.outputTokens || 0 },
             remaining: {
               dailyMessagesLeft: Math.max(DAILY_MESSAGE_LIMIT - dailyCount, 0),
               monthlyTokensLeft: Math.max(MONTHLY_TOKEN_LIMIT - monthlyTokens, 0),
             },
             sources: data.sources || [],
+            sourcesSummary: data.sourcesSummary || "",
+            sourcesLabel: data.sourcesLabel || data.sourcesSummary || "",
+            references: data.references || [],
             citations: data.citations || [],
             citationMeta: data.citationMeta || [],
             threadId: activeThreadId,
             mode: data.mode,
+            assistantMode: data.assistantMode || assistantMode,
             policyApplied: data.policyApplied,
             requestId,
           });
@@ -1069,15 +1277,15 @@ export async function POST(req: NextRequest) {
       .reverse()
       .map((msg) => ({ role: msg.role, content: msg.content }));
 
-    const fallbackByLang = {
-      en: "The teacher has not added lesson context yet. Please ask a more specific question or contact your teacher.",
-      kz: "??? ????? ??????? ???????? ??? ??????????. ???????? ????? ??????? ?????? ????????? ????????????.",
-      ru: "????????????? ??? ?? ??????? ???????? ??? ????? ?????. ???????? ?????? ??? ????????? ? ??????????????.",
+    const contextWarningByLang = {
+      en: "I don't have lesson materials attached in this scope. Here's a general answer:",
+      kz: "Бұл аяда сабақ материалдары тіркелмеген. Жалпы жауап:",
+      ru: "В этом режиме материалы урока не подключены. Общий ответ:",
     };
     const pdfUnreadableByLang = {
-      en: "Lesson PDFs are attached but their text could not be read yet. Please try again later or ask a more specific question.",
-      kz: "??????? PDF ???????? ????????, ????? ??????? ??????? ??? ?????? ?????? ???????. ????????? ???????? ??????? ?????? ???????? ????? ???????.",
-      ru: "? ????? ??????????? PDF-?????, ?? ?? ????? ???? ?? ??????? ?????????. ?????????? ????? ??? ??????? ????? ?????? ??????.",
+      en: "Lesson PDFs are attached but their text could not be read yet. I'll answer generally for now.",
+      kz: "Сабақтың PDF файлдары тіркелген, бірақ мәтінін оқи алмадым. Қазір жалпы жауап беремін.",
+      ru: "PDF-файлы урока прикреплены, но текст прочитать не удалось. Пока отвечу в общем виде.",
     };
 
     const questionNormalized = normalizeQuestion(message);
@@ -1134,115 +1342,10 @@ export async function POST(req: NextRequest) {
       selectedChunkTexts.length > 0 &&
       ((explicitQuery && !explicitMentionFound) || (sensitiveRequested && !sensitiveMentioned));
 
-    if (!hasLessonContext && !hasPdfContext) {
+    const contextMissing = inferredScope !== "platform" && !hasLessonContext && !hasPdfContext;
+    if (contextMissing) {
       stage = "context:missing";
       log("info", stage, { pdfFoundCount, pdfResolvedCount, pdfUnreadable });
-      const replyText = lang == "kz"
-        ? (pdfUnreadable ? pdfUnreadableByLang.kz : fallbackByLang.kz)
-        : (pdfUnreadable ? pdfUnreadableByLang.en : fallbackByLang.en);
-      const usage = { input_tokens: 0, output_tokens: 0 };
-      const nextDaily = dailyCount + 1;
-      const nextMonthly = monthlyTokens;
-      stage = "quota:write";
-      log("info", stage);
-      try {
-        await db.runTransaction(async (tx) => {
-          tx.set(
-            dailyRef,
-            {
-              uid,
-              date: dateKey,
-              count: nextDaily,
-              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            },
-            { merge: true },
-          );
-          tx.set(
-            monthlyRef,
-            {
-              uid,
-              month: monthKey,
-              tokensUsed: nextMonthly,
-              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            },
-            { merge: true },
-          );
-          const now = admin.firestore.FieldValue.serverTimestamp();
-          const threadRef = threadsRef.doc(activeThreadId);
-          const userMessageRef = safeClientRequestId ? messagesRef.doc(`u_${safeClientRequestId}`) : messagesRef.doc();
-          const assistantMessageRef = safeClientRequestId ? messagesRef.doc(`a_${safeClientRequestId}`) : messagesRef.doc();
-          tx.set(userMessageRef, {
-            role: "user",
-            content: message,
-            createdAt: now,
-            courseId: String(courseId || ""),
-            lessonId: String(lessonId || ""),
-            uid,
-          });
-          tx.set(assistantMessageRef, {
-            role: "assistant",
-            content: replyText,
-            createdAt: now,
-            model: OPENAI_MODEL,
-            inputTokens: usage.input_tokens,
-            outputTokens: usage.output_tokens,
-            totalTokens: usage.input_tokens + usage.output_tokens,
-            courseId: String(courseId || ""),
-            lessonId: String(lessonId || ""),
-            uid,
-            sources: structuredSources,
-            citations: [],
-            citationMeta: [],
-            mode,
-            policyApplied,
-          });
-          tx.set(
-            threadRef,
-            {
-              updatedAt: now,
-              lastMessageAt: now,
-              messageCount: admin.firestore.FieldValue.increment(2),
-            },
-            { merge: true },
-          );
-        });
-      } catch (err) {
-        log("error", stage, { code: "quota_write_failed", message: String(err) });
-        return respondError(500, stage, "quota_write_failed", "Failed to write quota.");
-      }
-      const outcome = pdfUnreadable ? "unsupported" : "unsupported";
-      try {
-        stage = "analytics:write";
-        log("info", stage, { outcome });
-        await writeAnalytics(db, {
-          courseId: courseId ? String(courseId) : "unknown",
-          lessonId: lessonId ? String(lessonId) : null,
-          date: getDateString(now),
-          mode,
-          outcome,
-          qHash,
-          exampleTruncated,
-          now,
-        });
-      } catch (err) {
-        log("warn", stage, { code: "analytics_write_failed", message: String(err) });
-      }
-      return NextResponse.json({
-        answer: replyText,
-        replyText,
-        threadId: activeThreadId,
-        usage,
-        sources: structuredSources,
-        citations: [],
-        citationMeta: [],
-        pdfUnreadable,
-        mode,
-        policyApplied,
-        remaining: {
-          dailyMessagesLeft: Math.max(DAILY_MESSAGE_LIMIT - nextDaily, 0),
-          monthlyTokensLeft: Math.max(MONTHLY_TOKEN_LIMIT - nextMonthly, 0),
-        },
-      });
     }
 
     const styleInstruction =
@@ -1257,16 +1360,29 @@ export async function POST(req: NextRequest) {
       restrictedMode && !policyApplied.allowFullSolutions
         ? "Do not provide full worked solutions. Provide partial steps only."
         : "Full solutions are allowed when supported by citations.";
-    const systemPrompt =
-      `You are a helpful tutor for this platform. Use ONLY the provided context pack. If the context is insufficient, ask a clarifying question. Do not fabricate references or facts. ` +
-      `If the user asks "according to the PDF/lesson/chapter" and the information is not present in the provided excerpts, respond exactly: "Not mentioned in the provided excerpts." Then provide only related context labeled as related, and ask one clarifying question. ` +
+    const hasExcerpts = selectedChunkIds.size > 0;
+    const generalSystemPrompt =
+      `You are a helpful general tutor and platform helper. Answer normally like ChatGPT. ` +
+      `Do NOT mention sources, excerpts, or context packs. ` +
+      `Only use the platform handbook when the question is about XY-School (roles, navigation, support). ` +
+      `Use Markdown for formatting. Use $...$ and $$...$$ for math. Use triple backticks for code blocks. ` +
+      `Output must be ONLY in ${lang}. Do not mix languages. ` +
+      `Return a JSON object with keys: answerMarkdown (string), citations (array), confidence ("low"|"medium"|"high"), needsMoreContext (boolean), clarifyingQuestion (string or null).`;
+    const groundedSystemPrompt =
+      `You are a helpful tutor for this platform. Use ONLY the selected materials when they are provided. ` +
+      `If the user asks "according to the PDF/lesson/chapter" and the information is not present in the provided excerpts, respond exactly: "I didn’t find this in the selected materials." ` +
+      `Then optionally add: "General explanation:" followed by a general explanation. ` +
       `Do not include sources or citations text inside the answer string. ` +
+      `Use Markdown for formatting. Use $...$ and $$...$$ for math. Use triple backticks for code blocks. ` +
       `Output must be ONLY in ${lang}. Do not mix languages. Translate any excerpt content into ${lang}. ` +
       `${styleInstruction} ${policyInstruction} ${fullSolutionInstruction} ` +
-      `Return a JSON object with keys: answer (string), citations (array of chunk ids), confidence ("low"|"medium"|"high"), needsMoreContext (boolean), clarifyingQuestion (string or null). ` +
-      `Every substantive claim must include at least one citation id from the provided chunks. ` +
-      `If you cannot support the answer, set needsMoreContext=true, state that the excerpts do not support it, provide a brief related summary using citations, and ask one clarifying question.`;
-    const systemContent = combinedContextText ? `Context pack:\n${combinedContextText}` : "Context pack: (empty)";
+      `Return a JSON object with keys: answerMarkdown (string), citations (array of chunk ids), confidence ("low"|"medium"|"high"), needsMoreContext (boolean), clarifyingQuestion (string or null). ` +
+      `Every substantive claim grounded in excerpts must include at least one citation id from the provided chunks. ` +
+      `If you cannot support the answer from excerpts, set needsMoreContext=true and ask one clarifying question.`;
+    const systemPrompt = groundedSelected ? groundedSystemPrompt : generalSystemPrompt;
+    const systemContent = combinedContextText
+      ? `Context pack:\n${combinedContextText}`
+      : "Context pack: (empty)";
 
     stage = "openai:request";
     log("info", stage);
@@ -1304,25 +1420,55 @@ export async function POST(req: NextRequest) {
     stage = "openai:parse";
     log("info", stage);
     const rawReplyText = extractReply(data) || "";
-    let replyText = rawReplyText || "Sorry, I could not generate a reply.";
-    let citations: string[] = [];
-    let confidence: "low" | "medium" | "high" | undefined;
-    let needsMoreContext: boolean | undefined;
-    let clarifyingQuestion: string | null | undefined;
-    if (rawReplyText) {
+    const tryParseJson = (text: string) => {
       try {
-        const parsed = JSON.parse(rawReplyText);
-        if (typeof parsed?.answer === "string") replyText = parsed.answer;
-        if (Array.isArray(parsed?.citations)) citations = parsed.citations.filter((c: unknown) => typeof c === "string");
-        if (parsed?.confidence === "low" || parsed?.confidence === "medium" || parsed?.confidence === "high") {
-          confidence = parsed.confidence;
+        return JSON.parse(text);
+      } catch {
+        const start = text.indexOf("{");
+        const end = text.lastIndexOf("}");
+        if (start >= 0 && end > start) {
+          try {
+            return JSON.parse(text.slice(start, end + 1));
+          } catch {
+            return null;
+          }
         }
-        if (typeof parsed?.needsMoreContext === "boolean") needsMoreContext = parsed.needsMoreContext;
-        if (typeof parsed?.clarifyingQuestion === "string") clarifyingQuestion = parsed.clarifyingQuestion;
-      } catch (err) {
-        log("warn", stage, { code: "openai_invalid_output", message: String(err) });
-        // keep raw reply
+        return null;
       }
+    };
+    const parsed = rawReplyText ? tryParseJson(rawReplyText) : null;
+    const extractFromRaw = (raw: string) => {
+      const match = raw.match(/"answerMarkdown"\s*:\s*"([\s\S]*?)"\s*(?:,|\})/);
+      if (match?.[1]) {
+        try {
+          return JSON.parse(`"${match[1].replace(/"/g, '\\"')}"`);
+        } catch {
+          return match[1];
+        }
+      }
+      return raw;
+    };
+    let replyText =
+      typeof parsed?.answerMarkdown === "string"
+        ? parsed.answerMarkdown
+        : typeof parsed?.answer === "string"
+          ? parsed.answer
+          : rawReplyText
+            ? extractFromRaw(rawReplyText)
+            : "Sorry, I could not generate a reply.";
+    let citations: string[] = Array.isArray(parsed?.citations)
+      ? parsed.citations.filter((c: unknown) => typeof c === "string")
+      : [];
+    let confidence: "low" | "medium" | "high" =
+      parsed?.confidence === "low" || parsed?.confidence === "medium" || parsed?.confidence === "high"
+        ? parsed.confidence
+        : "medium";
+    let needsMoreContext: boolean =
+      typeof parsed?.needsMoreContext === "boolean" ? parsed.needsMoreContext : true;
+    let clarifyingQuestion: string | null =
+      typeof parsed?.clarifyingQuestion === "string" ? parsed.clarifyingQuestion : "Could you уточнить вопрос?";
+    if (!parsed && rawReplyText) {
+      log("warn", stage, { code: "openai_invalid_output" });
     }
     replyText = replyText.replace(/^\s*(Sources?|Citations?)\s*:.*$/gim, "").trim();
 
@@ -1389,7 +1535,7 @@ export async function POST(req: NextRequest) {
     const hintTemplate = hintTemplates[lang as "en" | "kz" | "ru"] || hintTemplates.en;
     const hintResponse = `${hintTemplate.noDirect}\n${hintTemplate.related}\n${hintTemplate.question}`;
 
-    const citationRequired = policyApplied.citationRequired !== false && selectedChunkIds.size > 0;
+    const citationRequired = groundedSelected && policyApplied.citationRequired !== false && selectedChunkIds.size > 0;
     const citationsInvalid = citations.some((id) => !selectedChunkIds.has(id));
     const hadInvalidCitations = citationsInvalid;
     if (citationsInvalid) {
@@ -1401,14 +1547,14 @@ export async function POST(req: NextRequest) {
     const languageMismatch =
       (lang === "en" && isMostlyCyrillic(replyText)) ||
       ((lang === "kz" || lang === "ru") && isMostlyLatin(replyText));
-    if (forceNotMentioned) {
+    if (groundedSelected && forceNotMentioned) {
       replyText = notMentionedResponse;
       citations = Array.from(selectedChunkIds).slice(0, 2);
       confidence = "low";
       needsMoreContext = true;
       clarifyingQuestion = notMentionedTemplate.question.replace(/^Clarifying question:\s*/i, "").trim();
     }
-    if (forceHint) {
+    if (groundedSelected && forceHint) {
       replyText = hintResponse;
       citations = Array.from(selectedChunkIds).slice(0, 2);
       confidence = "low";
@@ -1420,7 +1566,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (!forceHint && !forceNotMentioned && (citationIssue || needsMoreContext || languageMismatch)) {
+    if (
+      groundedSelected &&
+      !forceHint &&
+      !forceNotMentioned &&
+      (citationIssue || needsMoreContext || languageMismatch)
+    ) {
       log("warn", stage, {
         code: citationIssue ? "openai_invalid_citations" : "openai_language_mismatch",
         invalidCitations: citationIssue,
@@ -1432,6 +1583,16 @@ export async function POST(req: NextRequest) {
       confidence = "low";
       needsMoreContext = true;
       clarifyingQuestion = template.question.replace(/^Clarifying question:\s*/i, "").trim();
+    }
+
+    const warningText =
+      groundedSelected && pdfUnreadable
+        ? (pdfUnreadableByLang[lang as "en" | "kz" | "ru"] || pdfUnreadableByLang.en)
+        : groundedSelected && contextMissing
+          ? (contextWarningByLang[lang as "en" | "kz" | "ru"] || contextWarningByLang.en)
+          : "";
+    if (warningText && !replyText.startsWith(warningText)) {
+      replyText = `${warningText}\n${replyText}`.trim();
     }
 
     const outcome = forceHint
@@ -1449,6 +1610,10 @@ export async function POST(req: NextRequest) {
 
     const nextDaily = dailyCount + 1;
     const nextMonthly = monthlyTokens + usage.input_tokens + usage.output_tokens;
+    const sourcesSummary = buildSourcesSummary(structuredSources);
+    const references = buildReferences(citations, structuredSources, citationMeta);
+    const citationsPayload = references.map((ref) => ({ title: ref.title, note: ref.label }));
+    const sourcesLabel = sourcesSummary || "";
 
     stage = "quota:write";
     log("info", stage);
@@ -1489,6 +1654,7 @@ export async function POST(req: NextRequest) {
         tx.set(assistantMessageRef, {
           role: "assistant",
           content: replyText,
+          answerMarkdown: replyText,
           createdAt: now,
           model: OPENAI_MODEL,
           inputTokens: usage.input_tokens,
@@ -1498,7 +1664,11 @@ export async function POST(req: NextRequest) {
           lessonId: String(lessonId || ""),
           uid,
           sources: structuredSources,
-          citations,
+          sourcesSummary,
+          sourcesLabel,
+          references,
+          citations: citationsPayload,
+          citationIds: citations,
           citationMeta,
           mode,
           policyApplied,
@@ -1506,6 +1676,7 @@ export async function POST(req: NextRequest) {
         tx.set(
           threadRef,
           {
+            scopeKey,
             updatedAt: now,
             lastMessageAt: now,
             messageCount: admin.firestore.FieldValue.increment(2),
@@ -1535,25 +1706,30 @@ export async function POST(req: NextRequest) {
       log("warn", stage, { code: "analytics_write_failed", message: String(err) });
     }
 
-    return NextResponse.json({
-      answer: replyText,
-      replyText,
-      threadId: activeThreadId,
-      usage,
-      sources: structuredSources,
-      citations,
-      citationMeta,
-      pdfUnreadable,
-      confidence,
-      needsMoreContext,
-      clarifyingQuestion,
-      mode,
-      policyApplied,
-      remaining: {
-        dailyMessagesLeft: Math.max(DAILY_MESSAGE_LIMIT - nextDaily, 0),
-        monthlyTokensLeft: Math.max(MONTHLY_TOKEN_LIMIT - nextMonthly, 0),
-      },
-    });
+      return NextResponse.json({
+        answer: replyText,
+        replyText,
+        answerMarkdown: replyText,
+        threadId: activeThreadId,
+        usage,
+        sources: structuredSources,
+        sourcesSummary,
+        sourcesLabel,
+        references,
+        citations: citationsPayload,
+        citationMeta,
+        pdfUnreadable,
+        confidence,
+        needsMoreContext,
+        clarifyingQuestion,
+        mode,
+        assistantMode,
+        policyApplied,
+        remaining: {
+          dailyMessagesLeft: Math.max(DAILY_MESSAGE_LIMIT - nextDaily, 0),
+          monthlyTokensLeft: Math.max(MONTHLY_TOKEN_LIMIT - nextMonthly, 0),
+        },
+      });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal error";
     log("error", "unhandled", { message });

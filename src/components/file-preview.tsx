@@ -40,8 +40,8 @@ export default function FilePreview({ url, filename, contentType, maxHeight = 20
     return (
       <div className="space-y-2">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={url} alt={label} style={{ maxHeight }} className="w-auto rounded-md border border-neutral-200" />
-        <Link href={url} className="text-xs text-blue-700" target="_blank" rel="noreferrer">
+        <img src={url} alt={label} style={{ maxHeight }} className="w-auto rounded-md border border-[var(--border)]" />
+        <Link href={url} className="text-xs text-[var(--text)]" target="_blank" rel="noreferrer">
           {t("buttons.open")}
         </Link>
       </div>
@@ -51,12 +51,12 @@ export default function FilePreview({ url, filename, contentType, maxHeight = 20
   if (kind === "pdf") {
     return (
       <div className="space-y-2">
-        <object data={url} type="application/pdf" className="h-[240px] w-full rounded-md border border-neutral-200">
-          <Link href={url} className="text-xs text-blue-700" target="_blank" rel="noreferrer">
+        <object data={url} type="application/pdf" className="h-[240px] w-full rounded-md border border-[var(--border)]">
+          <Link href={url} className="text-xs text-[var(--text)]" target="_blank" rel="noreferrer">
             {t("pdf.openPdf")}
           </Link>
         </object>
-        <Link href={url} className="text-xs text-blue-700" target="_blank" rel="noreferrer">
+        <Link href={url} className="text-xs text-[var(--text)]" target="_blank" rel="noreferrer">
           {t("buttons.open")}
         </Link>
       </div>
@@ -66,10 +66,10 @@ export default function FilePreview({ url, filename, contentType, maxHeight = 20
   if (kind === "video") {
     return (
       <div className="space-y-2">
-        <video controls className="w-full rounded-md border border-neutral-200" style={{ maxHeight }}>
+        <video controls className="w-full rounded-md border border-[var(--border)]" style={{ maxHeight }}>
           <source src={url} type={resolvedType} />
         </video>
-        <Link href={url} className="text-xs text-blue-700" target="_blank" rel="noreferrer">
+        <Link href={url} className="text-xs text-[var(--text)]" target="_blank" rel="noreferrer">
           {t("buttons.open")}
         </Link>
       </div>
@@ -78,8 +78,8 @@ export default function FilePreview({ url, filename, contentType, maxHeight = 20
 
   return (
     <div className="flex items-center gap-2 text-sm">
-      <span className="text-neutral-700">{label}</span>
-      <Link href={url} className="text-blue-700" target="_blank" rel="noreferrer">
+      <span className="text-[var(--text)]">{label}</span>
+      <Link href={url} className="text-[var(--text)]" target="_blank" rel="noreferrer">
         {t("buttons.open")}
       </Link>
     </div>

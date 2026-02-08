@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Button from "./ui/button";
 import { useI18n } from "../lib/i18n";
 
@@ -13,6 +13,8 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 
 export const PdfViewer = ({ url, title }: PdfViewerProps) => {
   const [zoom, setZoom] = useState<number>(1);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const { t } = useI18n();
 
   useEffect(() => {
@@ -21,9 +23,19 @@ export const PdfViewer = ({ url, title }: PdfViewerProps) => {
     }
   }, [url]);
 
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, []);
+
   if (!url) {
     return (
-      <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-600">
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-sm text-[var(--muted)]">
         {t("pdf.previewUnavailable")}
       </div>
     );
@@ -38,29 +50,52 @@ export const PdfViewer = ({ url, title }: PdfViewerProps) => {
     return `${url}${separator}zoom=${Math.round(clamp(zoom, 0.7, 2) * 100)}`;
   }, [url, zoom]);
 
+  const toggleFullscreen = async () => {
+    const node = containerRef.current;
+    if (!node) return;
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+    } else {
+      await node.requestFullscreen();
+    }
+  };
+
   return (
     <div className="space-y-3 w-full max-w-full overflow-x-hidden">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="text-sm font-semibold text-neutral-700">{title || t("pdf.title")}</div>
+        <div className="text-sm font-semibold text-[var(--text)]">{title || t("pdf.title")}</div>
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" variant="secondary" onClick={() => setZoom((z) => clamp(z - 0.1, 0.7, 2))}>
             -
           </Button>
-          <span className="text-xs text-neutral-600">{Math.round(zoom * 100)}%</span>
+          <span className="text-xs text-[var(--muted)]">{Math.round(zoom * 100)}%</span>
           <Button size="sm" variant="secondary" onClick={() => setZoom((z) => clamp(z + 0.1, 0.7, 2))}>
             +
           </Button>
-          <span className="mx-2 text-xs text-neutral-400">|</span>
-          <a className="text-xs text-blue-700" href={url} target="_blank" rel="noreferrer">
+          <span className="mx-2 text-xs text-[var(--muted)]">|</span>
+          <a className="text-xs text-[var(--text)]" href={url} target="_blank" rel="noreferrer">
             {t("pdf.openInNewTab")}
           </a>
-          <a className="text-xs text-blue-700" href={url} target="_blank" rel="noreferrer" download>
+          <a className="text-xs text-[var(--text)]" href={url} target="_blank" rel="noreferrer" download>
             {t("pdf.download")}
           </a>
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            className="hidden sm:inline-flex text-xs text-[var(--text)]"
+          >
+            {isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+          </button>
         </div>
       </div>
-      <div className="rounded-xl border border-neutral-200 bg-neutral-100 p-2 md:p-3">
-        <div className="mx-auto w-full max-w-[860px] min-w-0 overflow-hidden rounded-lg bg-white shadow">
+      <div className="block sm:hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-sm text-[var(--muted)]">
+        Preview is available on desktop. Use Open or Download.
+      </div>
+      <div
+        ref={containerRef}
+        className={`hidden sm:block rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2 md:p-3 ${isFullscreen ? "bg-black/90 p-4 flex items-center justify-center" : ""}`}
+      >
+        <div className="mx-auto w-full max-w-[860px] min-w-0 overflow-hidden rounded-lg bg-[var(--card)] shadow">
           <iframe
             src={iframeSrc}
             title={title || t("pdf.title")}

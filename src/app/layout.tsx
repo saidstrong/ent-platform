@@ -1,12 +1,20 @@
 import type { Metadata } from "next";
 import { Manrope } from "next/font/google";
+import localFont from "next/font/local";
 import { cookies } from "next/headers";
 import "./globals.css";
+import "katex/dist/katex.min.css";
 import Providers from "../components/providers";
 import Navbar from "../components/navbar";
 import type { Language } from "../lib/types";
+import { Analytics } from "@vercel/analytics/next"
 
 const manrope = Manrope({ subsets: ["latin"], variable: "--font-sans" });
+const kzFont = localFont({
+  src: "../../public/fonts/KZFont.ttf",
+  variable: "--font-kz",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "XY-School",
@@ -24,8 +32,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const initialLang: Language = langCookie === "en" || langCookie === "kz" ? langCookie : "kz";
 
   return (
-    <html lang="en">
-      <body className={`${manrope.variable} bg-slate-50 text-neutral-900 antialiased`}>
+    <html lang={initialLang} suppressHydrationWarning>
+      <body
+        className={`${manrope.variable} ${kzFont.variable} ${
+          initialLang === "kz" ? "font-kz" : ""
+        } bg-[var(--bg)] text-[var(--text)] antialiased`}
+      >
         <Providers initialLang={initialLang}>
           <Navbar />
           <main className="min-h-screen">{children}</main>

@@ -43,19 +43,19 @@ export default function SignupPage() {
       <Card>
         <form className="space-y-4" onSubmit={submit}>
           <div>
-            <label className="text-sm font-medium text-neutral-700">{t("auth.fullName")}</label>
+            <label className="text-sm font-medium text-[var(--text)]">{t("auth.fullName")}</label>
             <Input required value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Aruzhan Aman" />
           </div>
           <div>
-            <label className="text-sm font-medium text-neutral-700">{t("auth.email")}</label>
+            <label className="text-sm font-medium text-[var(--text)]">{t("auth.email")}</label>
             <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
           </div>
           <div>
-            <label className="text-sm font-medium text-neutral-700">{t("auth.password")}</label>
+            <label className="text-sm font-medium text-[var(--text)]">{t("auth.password")}</label>
             <Input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
           </div>
           <div>
-            <label className="text-sm font-medium text-neutral-700">{t("auth.preferredLanguage")}</label>
+            <label className="text-sm font-medium text-[var(--text)]">{t("auth.preferredLanguage")}</label>
             <Select value={lang} onChange={(e) => setLang(e.target.value as Language)}>
               <option value="kz">KZ</option>
               <option value="en">EN</option>
@@ -67,9 +67,9 @@ export default function SignupPage() {
           </Button>
         </form>
       </Card>
-      <p className="text-sm text-neutral-600">
+      <p className="text-sm text-[var(--muted)]">
         {t("auth.haveAccount")}{" "}
-        <Link className="font-semibold text-blue-700" href="/login">
+        <Link className="font-semibold text-[var(--text)]" href="/login">
           {t("auth.signIn")}
         </Link>
       </p>

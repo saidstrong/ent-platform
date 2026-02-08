@@ -145,7 +145,7 @@ export default function TeacherSubmissionPage() {
       <RequireTeacherOrAdmin>
         <div className="mx-auto max-w-4xl space-y-4 px-4 py-8">
           <div className="space-y-2">
-            <Link href="/teacher" className="text-sm text-blue-700">
+            <Link href="/teacher" className="text-sm text-[var(--text)]">
               Back to inbox
             </Link>
             <h1 className="text-2xl font-semibold">Submission review</h1>
@@ -155,11 +155,11 @@ export default function TeacherSubmissionPage() {
           {notice && <p className="text-sm text-emerald-700">{notice}</p>}
 
           <Card className="space-y-2">
-            <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-neutral-600">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-[var(--muted)]">
               <span>{assignment?.title_en || submission?.assignmentId}</span>
               <span>Submitted: {formatAnyTimestamp(submission?.submittedAt)}</span>
             </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-500">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
               <span>Student: {student?.displayName || student?.email || submission?.uid}</span>
               <span>Course: {submission?.courseId || "-"}</span>
               <span>Lesson: {submission?.lessonId || "-"}</span>
@@ -169,19 +169,19 @@ export default function TeacherSubmissionPage() {
                 <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Pending</span>
               )}
             </div>
-            {loading && <p className="text-sm text-neutral-600">Loading submission...</p>}
+            {loading && <p className="text-sm text-[var(--muted)]">Loading submission...</p>}
             {assignment?.instructions_en && (
-              <div className="rounded-md bg-neutral-50 p-2 text-xs text-neutral-600">
-                <p className="font-semibold text-neutral-700">Assignment instructions</p>
+              <div className="rounded-md bg-[var(--surface)] p-2 text-xs text-[var(--muted)]">
+                <p className="font-semibold text-[var(--text)]">Assignment instructions</p>
                 <p>{assignment.instructions_en}</p>
               </div>
             )}
-            {submission?.textAnswer && <p className="text-sm text-neutral-700">Answer: {submission.textAnswer}</p>}
+            {submission?.textAnswer && <p className="text-sm text-[var(--text)]">Answer: {submission.textAnswer}</p>}
             {submission?.fileUrl && (
               <div className="space-y-2 text-sm">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs text-neutral-600">{submission.fileName || submission.fileUrl}</span>
-                  <a className="text-blue-700" href={submission.fileUrl} target="_blank" rel="noreferrer">
+                  <span className="text-xs text-[var(--muted)]">{submission.fileName || submission.fileUrl}</span>
+                  <a className="text-[var(--text)]" href={submission.fileUrl} target="_blank" rel="noreferrer">
                     Open
                   </a>
                 </div>
@@ -194,13 +194,13 @@ export default function TeacherSubmissionPage() {
                   <img src={submission.fileUrl} alt="Submission attachment" className="max-h-40 rounded-md object-contain" />
                 )}
                 {(submission.contentType === "application/pdf" || submission.fileUrl.endsWith(".pdf")) && (
-                  <a className="text-blue-700" href={submission.fileUrl} target="_blank" rel="noreferrer">
+                  <a className="text-[var(--text)]" href={submission.fileUrl} target="_blank" rel="noreferrer">
                     Open PDF
                   </a>
                 )}
               </div>
             )}
-            <div className="text-xs text-neutral-500">
+            <div className="text-xs text-[var(--muted)]">
               <p>Checked at: {formatAnyTimestamp(submission?.checkedAt)}</p>
               <p>Checked by: {submission?.checkedBy || "-"}</p>
             </div>
@@ -208,7 +208,7 @@ export default function TeacherSubmissionPage() {
 
           <Card className="space-y-3">
             <div>
-              <label className="text-sm font-semibold text-neutral-700">Feedback</label>
+              <label className="text-sm font-semibold text-[var(--text)]">Feedback</label>
               <Textarea
                 rows={4}
                 value={feedback}
@@ -220,7 +220,7 @@ export default function TeacherSubmissionPage() {
               />
             </div>
             <div>
-              <label className="text-sm font-semibold text-neutral-700">Grade</label>
+              <label className="text-sm font-semibold text-[var(--text)]">Grade</label>
               <Input
                 type="number"
                 value={grade}
